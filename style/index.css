@@ -1,0 +1,22 @@
+@import url('base.css');
+
+.oceanum-navigator {
+  position: absolute;
+  right: 5px;
+  top: 0px;
+  width: 100px;
+  height: 28px;
+}
+
+.oceanum-navigator .navigator {
+  padding: 0px;
+  height: 24px;
+}
+
+.jp-DirListing-editor {
+  color: var(--jp-ui-font-color1);
+}
+
+.details-hidden {
+  display: none;
+}
