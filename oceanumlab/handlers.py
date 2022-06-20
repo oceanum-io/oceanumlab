@@ -24,5 +24,5 @@ def setup_handlers(web_app, url_path):
 
     # Prepend the base_url so that it works in a JupyterHub setting
     env_pattern = url_path_join(base_url, url_path, "env/(.*)")
-    handlers = [(env_pattern, EnvarsHandler), (app_pattern, AppHandler)]
+    handlers = [(env_pattern, EnvarsHandler)]
     web_app.add_handlers(host_pattern, handlers)

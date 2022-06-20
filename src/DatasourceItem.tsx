@@ -30,11 +30,12 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
   };
 
   return (
-    <div>
-      <div key={datasource.id} className="datasource-title">
+    <div className={expanded && 'expanded'}>
+      <div key={datasource.id} className="datasource-item-title">
         <button
           title={expanded ? 'Hide Details' : 'Show Details'}
           onClick={handleToggleExpand}
+          className="datasource-item-expand"
         >
           {expanded ? (
             <caretDownIcon.react
@@ -53,7 +54,9 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
         <span
           title={datasource.description}
           className={
-            onMouseDown ? 'datasource-name' : 'datasource-name draggable'
+            onMouseDown
+              ? 'datasource-item-name'
+              : 'datasource-item-name draggable'
           }
           onClick={handleToggleExpand}
           onMouseDown={e => onMouseDown(e, datasource)}
@@ -61,37 +64,50 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
           {datasource.description}
         </span>
 
-        <div>
+        <button
+          title="Insert code to load datasource"
+          onClick={handleToggleExpand}
+          className="datasource-item-action"
+        >
           <ArrowBendDownRight
             size={18}
             onClick={e => insertDatasource(datasource)}
           />
-        </div>
+        </button>
       </div>
       {expanded && (
-        <div className={'datasource-details'}>
-          <div>Datasource id: {datasource.datasource}</div>
+        <div className={'datasource-item-details'}>
+          <div className="datasource-query-field">
+            Datasource id: <span>{datasource.datasource}</span>
+          </div>
           {datasource.geofilter && (
-            <div>Geofilter type:{datasource.geofilter.type}</div>
+            <div className="datasource-query-field">
+              Geofilter type:<span>{datasource.geofilter.type}</span>
+            </div>
           )}
           {datasource.variables && (
-            <div>Variables: {datasource.variables.join(',')}</div>
+            <div className="datasource-query-field">
+              Variables:<span>{datasource.variables.join(',')}</span>
+            </div>
           )}
           {datasource.timefilter && (
-            <div>
-              Timefilter:{datasource.timefilter[0]} to{' '}
-              {datasource.timefilter[0]}
+            <div className="datasource-query-field">
+              Timefilter:<span>{datasource.timefilter.times[0]}</span>
+              <span>to</span>
+              <span>{datasource.timefilter.times[1]}</span>
             </div>
           )}
           {datasource.spatialref && (
-            <div>Spatialref:{datasource.spatialref}</div>
+            <div className="datasource-query-field">
+              Spatial ref:<span>{datasource.spatialref}</span>
+            </div>
           )}
           <div>
             <a
               href={`https://oceanum.io/datasets/${datasource.datasource}`}
               target="_blank"
             >
-              Details
+              Datasource details
             </a>
           </div>
         </div>

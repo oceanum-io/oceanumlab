@@ -1,22 +1,145 @@
 @import url('base.css');
 
-.oceanum-navigator {
-  position: absolute;
-  right: 5px;
-  top: 0px;
-  width: 100px;
-  height: 28px;
+.datasource-drag-image {
+  border: var(--jp-border-width) solid var(--jp-cell-editor-border-color);
+  width: var(--jp-private-notebook-dragImage-width);
+  height: var(--jp-private-notebook-dragImage-height);
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color1);
 }
 
-.oceanum-navigator .navigator {
-  padding: 0px;
-  height: 24px;
+.datamesh-iframe {
+  width: 98%;
+  height: 98%;
+  padding: 5px;
 }
 
-.jp-DirListing-editor {
+.datamesh-connect {
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color1);
+  height: 100%;
+}
+
+.datamesh-connect a {
+  color: var(--jp-content-link-color);
+}
+
+.datamesh-connect-header {
+  font-weight: bold;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.datamesh-connect-header p {
+  font-weight: bold;
+}
+
+.add-connection {
+  border-radius: 4px;
+}
+
+.add-connection :hover {
+  background-color: #ddd;
+}
+
+.datasource-list-item {
+  border-bottom: var(--jp-border-width) solid var(--jp-border-color2);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+}
+
+.open-datamesh-ui {
+  cursor: pointer;
+}
+
+.datamesh-package-name {
+  flex: 0 0 auto;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: var(--jp-ui-font-size0);
+  padding: 8px 8px 8px 12px;
+  margin: 0px;
+  margin-left: 10px;
+  margin-bottom: 10px;
+  font-size: var(--jp-ui-font-size2);
+}
+
+.datasource-item-expand,
+.datasource-item-action,
+.datasource-item-expand.jp-mod-styled {
+  background-color: transparent;
+  vertical-align: middle;
+  padding: 0;
+  width: 20px;
+  border: none;
+}
+
+.datasource-item-expand:hover {
+  cursor: pointer;
+}
+
+.datasource-item-details {
+  overflow-x: auto;
+  overflow-y: auto;
+  display: block;
+  padding: 5px;
+  margin: 5px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 2px;
+  color: var(--jp-ui-font-color1);
+  background-color: var(--jp-layout-color1);
+}
+
+.datasource-item-details textarea {
   color: var(--jp-ui-font-color1);
 }
 
-.details-hidden {
-  display: none;
+.datasource-item-action {
+  display: inline-flex;
+  align-self: flex-end;
+  align-items: center;
+  height: 100%;
+  border: none;
+}
+
+.datasource-item-action:hover,
+.datasource-item-name:hover {
+  cursor: pointer;
+}
+
+.datasource-item-name {
+  flex-grow: 1;
+  font-size: var(--jp-ui-font-size1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 0 4px 2px;
+  line-height: 28px;
+}
+
+.datasource-item-title {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  padding: 0px 4px;
+  height: 36px;
+}
+
+.datasource-item-title:hover {
+  background-color: var(--jp-layout-color2);
+}
+
+.datasource-query-field span {
+  margin-left: 5px;
+  white-space: nowrap;
+  font-size: var(--jp-ui-font-size0);
+}
+
+.expanded {
+  background-color: var(--jp-layout-color2);
+  padding: 2px;
 }

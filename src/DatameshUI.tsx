@@ -7,7 +7,7 @@ export class DatameshUI extends ReactWidget {
   render(): React.ReactElement {
     return (
       <iframe
-        src={`${DATAMESH_UI_SERVICE}/?datamesh_key=${window.datameshToken}`}
+        src={`${DATAMESH_UI_SERVICE}`}
         className="datamesh-iframe"
       ></iframe>
     );

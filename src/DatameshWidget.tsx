@@ -21,6 +21,61 @@ import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
+const TEST_SPEC = {
+  id: '4c2ecc99-92fb-4fd1-af55-78b0890be9b7',
+  name: 'Gnome test',
+  data: [
+    {
+      id: '7fa9e9aca5b5a85e72a69d1c22a13b0a',
+      geofilter: {
+        geom: [
+          174.0273878953156, -35.364005174508286, 174.36312023898938,
+          -35.070486824722074
+        ],
+        type: 'bbox'
+      },
+      variables: ['u10', 'v10'],
+      datasource: 'predictwind-gfs-1km-nz-boi',
+      timefilter: {
+        times: ['2022-06-05T23:04:35.000Z', '2022-06-12T23:04:35.000Z']
+      },
+      description: 'Predictwind NZ Bay Of Islands 1km GFS wind grid'
+    },
+    {
+      id: '429772d001bd06492f2393ded31356de',
+      geofilter: {
+        geom: [
+          174.0273878953156, -35.364005174508286, 174.36312023898938,
+          -35.070486824722074
+        ],
+        type: 'bbox'
+      },
+      variables: null,
+      datasource: 'osm-land-polygons',
+      timefilter: {
+        times: ['2022-06-05T23:04:35.000Z', '2022-06-06T23:04:35.000Z']
+      },
+      description: 'OSM land polygons'
+    },
+    {
+      id: 'e11032b3639442b0e4c85920adf708ae',
+      geofilter: {
+        geom: [
+          174.08248054247403, -35.294135844794106, 174.15842566904,
+          -35.214847249753305
+        ],
+        type: 'bbox'
+      },
+      variables: null,
+      datasource: 'oceanum_tide_cons_boi_40m',
+      timefilter: {
+        times: ['2022-06-09T19:47:14.000Z', '2022-06-10T19:47:14.000Z']
+      },
+      description: 'Bay Of Islands gridded tide'
+    }
+  ]
+};
+
 const make_query = (datasource_request: IDatasource) => {
   const query: Record<string, any> = {
     datasource: datasource_request.datasource
@@ -82,7 +137,7 @@ export interface IDatasource {
   description: string;
   variables?: string[];
   geofilter?: Record<string, any>;
-  timefilter: string[];
+  timefilter: any;
   spatialref: string;
 }
 
@@ -118,24 +173,32 @@ class DatameshPackageDisplay extends React.Component<IDatameshPackageProps> {
   render(): React.ReactElement {
     return (
       <div className={'datamesh-package-display'}>
-        <div>
-          {this.props.spec.data.map(datasource => (
-            // Render display of a code datasource
-            <div
-              key={datasource.id}
-              data-item-id={datasource.id}
-              className={'datasource-item'}
-            >
-              <DatasourceItem
-                datasource={datasource}
-                insertDatasource={this.insertDatameshConnect}
-                onMouseDown={(event: any): void => {
-                  this.handleDragSnippet(event, datasource);
-                }}
-              />
-            </div>
-          ))}
-        </div>
+        {this.props.spec ? (
+          <div>
+            <span className="datamesh-package-name">
+              {this.props.spec.name}
+            </span>
+            <hr></hr>
+            {this.props.spec.data.map(datasource => (
+              // Render display of a code datasource
+              <div
+                key={datasource.id}
+                data-item-id={datasource.id}
+                className={'datasource-item'}
+              >
+                <DatasourceItem
+                  datasource={datasource}
+                  insertDatasource={this.insertDatameshConnect}
+                  onMouseDown={(event: any): void => {
+                    this.handleDragSnippet(event, datasource);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="datamesh-package-name">Nothing loaded</span>
+        )}
       </div>
     );
   }
@@ -386,7 +449,7 @@ export class DatameshConnectWidget extends ReactWidget {
   renderSignal: Signal<this, any>;
   icon: LabIcon;
   openDatameshUI: any;
-  datameshPackageSpec: IPackageSpec;
+  datameshPackageSpec: IPackageSpec | null = null;
 
   constructor(props: IDatameshWidgetProps) {
     super();
@@ -402,13 +465,21 @@ export class DatameshConnectWidget extends ReactWidget {
   }
 
   receiveIFrameMessage(event: MessageEvent): void {
-    this.datameshPackageSpec = { id: '', name: '', data: [] };
+    if (event.data && event.data.action === 'package-modify') {
+      this.datameshPackageSpec = {
+        id: event.data.id,
+        name: event.data.name,
+        data: event.data.data
+      };
+      console.log(this.datameshPackageSpec);
+      this.renderSignal.emit(this.datameshPackageSpec);
+    }
   }
 
-  renderDisplay(datasourcelist: IDatasource[]): React.ReactElement {
+  renderDisplay(datameshPackage: IPackageSpec): React.ReactElement {
     return (
       <DatameshPackageDisplay
-        spec={this.datameshPackageSpec}
+        spec={datameshPackage}
         openDatameshUI={this.props.openDatameshUI}
         getCurrentWidget={this.props.getCurrentWidget}
         shell={this.props.app.shell}
@@ -420,25 +491,23 @@ export class DatameshConnectWidget extends ReactWidget {
     return (
       <div className={'datamesh-connect'}>
         <header className={'datamesh-connect-header'}>
-          <div style={{ display: 'flex' }}>
-            <this.props.icon.react
-              tag="span"
-              width="auto"
-              height="24px"
-              verticalAlign="middle"
-              marginRight="5px"
-            />
-            <p> Datamesh package </p>
-          </div>
+          <this.props.icon.react
+            tag="span"
+            width="auto"
+            height="24px"
+            verticalAlign="middle"
+            marginRight="5px"
+          />
+          <p> Datamesh package </p>
           <div
-            className="open-ui"
+            className="open-datamesh-ui"
             onClick={this.props.openDatameshUI}
             title={'Open Datamesh UI'}
           >
             {<addIcon.react height="24px" verticalAlign="middle" />}
           </div>
         </header>
-        <UseSignal signal={this.renderSignal} initialArgs={[]}>
+        <UseSignal signal={this.renderSignal} initialArgs={TEST_SPEC}>
           {(_, datameshPackage): React.ReactElement =>
             this.renderDisplay(datameshPackage)
           }

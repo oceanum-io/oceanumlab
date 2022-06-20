@@ -85,18 +85,6 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       datameshUIWidget.title.icon = textEditorIcon;
       datameshUIWidget.addClass('datamesh-ui');
       app.shell.add(datameshUIWidget, 'main');
-
-      //const iframe = <HTMLIFrameElement>datameshUIWidget.node.children[0];
-      // iframe.onload = () => {
-      //   iframe.contentWindow.postMessage(
-      //     {
-      //       source: 'oceanum-app',
-      //       accessToken: window.accessToken,
-      //       datasourceSpecs: metadata
-      //     },
-      //     '*'
-      //   );
-      // };
     };
 
     const datameshConnectWidget = new DatameshConnectWidget({
