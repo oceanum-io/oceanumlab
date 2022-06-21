@@ -7,7 +7,6 @@ import {
 import { ICommandPalette, IThemeManager } from '@jupyterlab/apputils';
 import { URLExt } from '@jupyterlab/coreutils';
 import { LabIcon } from '@jupyterlab/ui-components';
-import { textEditorIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ServerConnection } from '@jupyterlab/services';
@@ -96,7 +95,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       datameshUIWidget.title.label = 'Oceanum Datamesh';
       datameshUIWidget.id = widgetId;
       datameshUIWidget.title.closable = true;
-      datameshUIWidget.title.icon = textEditorIcon;
+      datameshUIWidget.title.icon = oceanumIcon;
       datameshUIWidget.addClass('datamesh-ui');
       app.shell.add(datameshUIWidget, 'main');
     };

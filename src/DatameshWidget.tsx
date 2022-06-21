@@ -21,61 +21,6 @@ import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-const TEST_SPEC = {
-  id: '4c2ecc99-92fb-4fd1-af55-78b0890be9b7',
-  name: 'Gnome test',
-  data: [
-    {
-      id: '7fa9e9aca5b5a85e72a69d1c22a13b0a',
-      geofilter: {
-        geom: [
-          174.0273878953156, -35.364005174508286, 174.36312023898938,
-          -35.070486824722074
-        ],
-        type: 'bbox'
-      },
-      variables: ['u10', 'v10'],
-      datasource: 'predictwind-gfs-1km-nz-boi',
-      timefilter: {
-        times: ['2022-06-05T23:04:35.000Z', '2022-06-12T23:04:35.000Z']
-      },
-      description: 'Predictwind NZ Bay Of Islands 1km GFS wind grid'
-    },
-    {
-      id: '429772d001bd06492f2393ded31356de',
-      geofilter: {
-        geom: [
-          174.0273878953156, -35.364005174508286, 174.36312023898938,
-          -35.070486824722074
-        ],
-        type: 'bbox'
-      },
-      variables: null,
-      datasource: 'osm-land-polygons',
-      timefilter: {
-        times: ['2022-06-05T23:04:35.000Z', '2022-06-06T23:04:35.000Z']
-      },
-      description: 'OSM land polygons'
-    },
-    {
-      id: 'e11032b3639442b0e4c85920adf708ae',
-      geofilter: {
-        geom: [
-          174.08248054247403, -35.294135844794106, 174.15842566904,
-          -35.214847249753305
-        ],
-        type: 'bbox'
-      },
-      variables: null,
-      datasource: 'oceanum_tide_cons_boi_40m',
-      timefilter: {
-        times: ['2022-06-09T19:47:14.000Z', '2022-06-10T19:47:14.000Z']
-      },
-      description: 'Bay Of Islands gridded tide'
-    }
-  ]
-};
-
 const make_query = (datasource_request: IDatasource) => {
   const query: Record<string, any> = {
     datasource: datasource_request.datasource
@@ -173,7 +118,7 @@ class DatameshPackageDisplay extends React.Component<IDatameshPackageProps> {
   render(): React.ReactElement {
     return (
       <div className={'datamesh-package-display'}>
-        {this.props.spec ? (
+        {this.props.spec && (
           <div>
             <span className="datamesh-package-name">
               {this.props.spec.name}
@@ -196,8 +141,6 @@ class DatameshPackageDisplay extends React.Component<IDatameshPackageProps> {
               </div>
             ))}
           </div>
-        ) : (
-          <span className="datamesh-package-name">Nothing loaded</span>
         )}
       </div>
     );
@@ -478,12 +421,21 @@ export class DatameshConnectWidget extends ReactWidget {
 
   renderDisplay(datameshPackage: IPackageSpec): React.ReactElement {
     return (
-      <DatameshPackageDisplay
-        spec={datameshPackage}
-        openDatameshUI={this.props.openDatameshUI}
-        getCurrentWidget={this.props.getCurrentWidget}
-        shell={this.props.app.shell}
-      />
+      <>
+        {this.datameshPackageSpec ? (
+          <DatameshPackageDisplay
+            spec={datameshPackage}
+            openDatameshUI={this.props.openDatameshUI}
+            getCurrentWidget={this.props.getCurrentWidget}
+            shell={this.props.app.shell}
+          />
+        ) : (
+          <div className="datasource-item-details">
+            <a onClick={this.props.openDatameshUI}>Open</a> the Oceanum datamesh
+            UI to add datasources
+          </div>
+        )}
+      </>
     );
   }
 
@@ -507,7 +459,7 @@ export class DatameshConnectWidget extends ReactWidget {
             {<addIcon.react height="24px" verticalAlign="middle" />}
           </div>
         </header>
-        <UseSignal signal={this.renderSignal} initialArgs={TEST_SPEC}>
+        <UseSignal signal={this.renderSignal} initialArgs={null}>
           {(_, datameshPackage): React.ReactElement =>
             this.renderDisplay(datameshPackage)
           }
