@@ -60,12 +60,11 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  font-size: var(--jp-ui-font-size0);
   padding: 8px 8px 8px 12px;
   margin: 0px;
-  margin-left: 10px;
+  margin-left: 0px;
   margin-bottom: 10px;
-  font-size: var(--jp-ui-font-size2);
+  font-size: var(--jp-ui-font-size1);
 }
 
 .datasource-item-expand,

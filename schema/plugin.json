@@ -1,8 +1,18 @@
 {
   "jupyter.lab.shortcuts": [],
-  "title": "oceanumlab",
+  "jupyter.lab.setting-icon": "oceanum:main",
+  "jupyter.lab.setting-icon-label": "Oceanum",
+  "title": "Oceanum.io",
+  "icon": "oceanum",
   "description": "oceanumlab settings.",
   "type": "object",
-  "properties": {},
+  "properties": {
+    "datameshToken": {
+      "type": "string",
+      "title": "Datamesh token",
+      "description": "Enter your datamesh token here. You can obtain this at https://home.oceanum.io/account",
+      "default": ""
+    }
+  },
   "additionalProperties": false
 }

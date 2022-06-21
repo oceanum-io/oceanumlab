@@ -11,7 +11,7 @@ import { textEditorIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ServerConnection } from '@jupyterlab/services';
-
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 
@@ -36,29 +36,43 @@ const oceanumIcon = new LabIcon({
 export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   id: 'datamesh-connect',
   autoStart: true,
-  requires: [ICommandPalette, ILayoutRestorer, ILabStatus],
+  requires: [ICommandPalette, ILayoutRestorer, ILabStatus, ISettingRegistry],
   optional: [IThemeManager],
   activate: (
     app: JupyterFrontEnd,
     palette: ICommandPalette,
     restorer: ILayoutRestorer,
     status: ILabStatus,
+    settingRegistry: ISettingRegistry,
     themeManager: IThemeManager | null
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
-    const settings = ServerConnection.makeSettings();
+    //Try to get the datamesh token from the settings
+    const serversettings = ServerConnection.makeSettings();
+    //let pluginSettings: ISettingRegistry.ISettings = null;
+    const updateSettings = (set: ISettingRegistry.ISettings) => {
+      const setting = set.get('datameshToken');
+      if (setting && setting.user) {
+        window.datameshToken = setting.user as string;
+      }
+    };
+    settingRegistry.load('@oceanum/oceanumlab:plugin').then(set => {
+      set.changed.connect(updateSettings, this);
+      updateSettings(set);
+    });
+    //Try to get the datamesh token from the envars
     const requestUrl = URLExt.join(
-      settings.baseUrl,
+      serversettings.baseUrl,
       'oceanum',
       'env',
       'DATAMESH_TOKEN'
     );
-
     fetch(requestUrl)
       .then(res => res.json())
       .then(json => {
-        window.datameshToken = json['DATAMESH_TOKEN'];
+        if (!window.datameshToken)
+          window.datameshToken = json['DATAMESH_TOKEN'];
       });
 
     const getCurrentWidget = (): Widget => {

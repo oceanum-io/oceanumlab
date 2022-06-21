@@ -1,0 +1,61 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "python": "/home/dave/miniconda3/envs/oceanumlab/bin/python",
+      "args": ["install"],
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: Jupyerlab build",
+      "type": "python",
+      "request": "launch",
+      "module": "jupyterlab.labextensions",
+      "args": ["develop", ".", "--overwrite"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/packages/datamesh-connect",
+      "justMyCode": false
+    },
+    {
+      "name": "Python: Jupyerlab run",
+      "type": "python",
+      "request": "launch",
+      "module": "jupyterlab",
+      "python": "/home/dave/miniconda3/envs/oceanumlab/bin/python",
+      "args": [
+        //"--log-level",
+        //"DEBUG",
+        //"--config=${workspaceFolder}/etc/config/jupyter_notebook_config.py",
+        "--notebook-dir=/home/dave/Workspace"
+      ],
+      "env": {
+        "DATAMESH_IMPORT_SERVICE": "https://datamesh-import.oceanum.tech",
+        "DATAMESH_TOKEN": "ccd8ac3daf2a68a10aacb909128f3f67bc3663a4",
+        "DATAMESH_QUERY_SERVICE": "https://datamesh-query.oceanum.tech",
+        "DATAMESH_SERVICE": "https://datamesh.oceanum.tech",
+        "DATAMESH_USER": "oceanum",
+        "NOTEBOOK_DIR": "/home/dave/Workspace",
+        "SQL_HOST": "/tmp/cloudsql/oceanum-eda:us-central1:eda-postgres",
+        "STORAGE_ACCESS_KEY": "oceanum",
+        "STORAGE_BUCKET": "oceanum-io-org-oceanum",
+        "STORAGE_SECRET_KEY": "ccd8ac3daf2a68a10aacb909128f3f67bc3663a4",
+        "STORAGE_SERVICE": "https://storage.oceanum.tech",
+        "JUPYTERLAB_S3_ENDPOINT": "https://storage.oceanum.tech",
+        "JUPYTERLAB_S3_ACCESS_KEY_ID": "oceanum",
+        "JUPYTERLAB_S3_SECRET_ACCESS_KEY": "7f8836f4cdb3f8a3d1a15e05f0a5f62182631b2f"
+      },
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "logToFile": true
+    }
+  ]
+}

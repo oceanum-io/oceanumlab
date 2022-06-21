@@ -124,7 +124,7 @@ const datasourceCode = (
     datasourceStr =
       'from oceanum.datamesh import Connector' +
       '\n' +
-      'datamesh=Connector()' +
+      `datamesh=Connector("${window.datameshToken}")` +
       '\n' +
       datasourceStr;
   }
