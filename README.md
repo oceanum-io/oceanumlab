@@ -1,6 +1,6 @@
 # oceanumlab
 
-[![Github Actions Status](https://github.com/oceanum.io/oceanumlab/workflows/Build/badge.svg)](https://github.com/oceanum.io/oceanumlab/actions/workflows/build.yml)
+[![Github Actions Status](https://github.com/oceanum-io/oceanumlab/workflows/Build/badge.svg)](https://github.com/oceanum-io/oceanumlab/actions/workflows/build.yml)
 A Jupyterlab extension to interact with the Oceanum.io platform
 
 This extension is composed of a Python package named `oceanumlab`

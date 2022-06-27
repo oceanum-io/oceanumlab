@@ -1,15 +1,15 @@
 {
   "name": "@oceanum/oceanumlab",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "A Jupyterlab extension to interact with the Oceanum.io platform",
   "keywords": [
     "jupyter",
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/oceanum.io/oceanumlab",
+  "homepage": "https://github.com/oceanum-io/oceanumlab",
   "bugs": {
-    "url": "https://github.com/oceanum.io/oceanumlab/issues"
+    "url": "https://github.com/oceanum-io/oceanumlab/issues"
   },
   "license": "BSD-3-Clause",
   "author": {
