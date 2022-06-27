@@ -432,7 +432,8 @@ export class DatameshConnectWidget extends ReactWidget {
         ) : (
           <div className="datasource-item-details">
             <a onClick={this.props.openDatameshUI}>Open</a> the Oceanum datamesh
-            UI to add datasources
+            UI to add datasources. You will need to allow popups on this page if
+            you are not already logged in to Oceanum.io.
           </div>
         )}
       </>
