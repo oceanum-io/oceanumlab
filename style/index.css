@@ -55,7 +55,7 @@
   cursor: pointer;
 }
 
-.datamesh-package-name {
+.datamesh-workspace-name {
   flex: 0 0 auto;
   font-weight: 600;
   text-transform: uppercase;

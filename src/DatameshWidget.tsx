@@ -86,14 +86,14 @@ export interface IDatasource {
   spatialref: string;
 }
 
-export interface IPackageSpec {
+export interface IWorkspaceSpec {
   id: string;
   name: string;
   data: IDatasource[];
 }
 
-export interface IDatameshPackageProps {
-  spec: IPackageSpec;
+export interface IDatameshWorkspaceProps {
+  spec: IWorkspaceSpec;
   openDatameshUI: (args: any) => void;
   getCurrentWidget: () => Widget;
   shell: JupyterFrontEnd.IShell;
@@ -106,8 +106,8 @@ export interface IDatasourceActionButton {
   onClick: () => void;
 }
 
-class DatameshPackageDisplay extends React.Component<IDatameshPackageProps> {
-  constructor(props: IDatameshPackageProps) {
+class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> {
+  constructor(props: IDatameshWorkspaceProps) {
     super(props);
     this._drag = null;
     this._dragData = null;
@@ -117,10 +117,10 @@ class DatameshPackageDisplay extends React.Component<IDatameshPackageProps> {
 
   render(): React.ReactElement {
     return (
-      <div className={'datamesh-package-display'}>
+      <div className={'datamesh-workspace-display'}>
         {this.props.spec && (
           <div>
-            <span className="datamesh-package-name">
+            <span className="datamesh-workspace-name">
               {this.props.spec.name}
             </span>
             <hr></hr>
@@ -392,7 +392,7 @@ export class DatameshConnectWidget extends ReactWidget {
   renderSignal: Signal<this, any>;
   icon: LabIcon;
   openDatameshUI: any;
-  datameshPackageSpec: IPackageSpec | null = null;
+  datameshWorkspaceSpec: IWorkspaceSpec | null = null;
 
   constructor(props: IDatameshWidgetProps) {
     super();
@@ -408,23 +408,23 @@ export class DatameshConnectWidget extends ReactWidget {
   }
 
   receiveIFrameMessage(event: MessageEvent): void {
-    if (event.data && event.data.action === 'package-modify') {
-      this.datameshPackageSpec = {
+    if (event.data && event.data.action === 'workspace-modify') {
+      this.datameshWorkspaceSpec = {
         id: event.data.id,
         name: event.data.name,
         data: event.data.data
       };
-      console.log(this.datameshPackageSpec);
-      this.renderSignal.emit(this.datameshPackageSpec);
+      console.log(this.datameshWorkspaceSpec);
+      this.renderSignal.emit(this.datameshWorkspaceSpec);
     }
   }
 
-  renderDisplay(datameshPackage: IPackageSpec): React.ReactElement {
+  renderDisplay(datameshWorkspace: IWorkspaceSpec): React.ReactElement {
     return (
       <>
-        {this.datameshPackageSpec ? (
-          <DatameshPackageDisplay
-            spec={datameshPackage}
+        {this.datameshWorkspaceSpec ? (
+          <DatameshWorkspaceDisplay
+            spec={datameshWorkspace}
             openDatameshUI={this.props.openDatameshUI}
             getCurrentWidget={this.props.getCurrentWidget}
             shell={this.props.app.shell}
@@ -451,7 +451,7 @@ export class DatameshConnectWidget extends ReactWidget {
             verticalAlign="middle"
             marginRight="5px"
           />
-          <p> Datamesh package </p>
+          <p> Datamesh workspace </p>
           <div
             className="open-datamesh-ui"
             onClick={this.props.openDatameshUI}
@@ -461,8 +461,8 @@ export class DatameshConnectWidget extends ReactWidget {
           </div>
         </header>
         <UseSignal signal={this.renderSignal} initialArgs={null}>
-          {(_, datameshPackage): React.ReactElement =>
-            this.renderDisplay(datameshPackage)
+          {(_, datameshWorkspace): React.ReactElement =>
+            this.renderDisplay(datameshWorkspace)
           }
         </UseSignal>
       </div>
