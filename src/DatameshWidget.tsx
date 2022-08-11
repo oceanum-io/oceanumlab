@@ -21,25 +21,6 @@ import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-const make_query = (datasource_request: IDatasource) => {
-  const query: Record<string, any> = {
-    datasource: datasource_request.datasource
-  };
-  if (datasource_request.variables) {
-    query.variables = datasource_request.variables;
-  }
-  if (datasource_request.geofilter) {
-    query.geofilter = datasource_request.geofilter;
-  }
-  if (datasource_request.timefilter) {
-    query.timefilter = datasource_request.timefilter;
-  }
-  if (datasource_request.spatialref) {
-    query.spatialref = datasource_request.spatialref;
-  }
-  return query;
-};
-
 const datasourceCode = (
   datasource: IDatasource,
   notebook: Notebook,
@@ -61,10 +42,17 @@ const datasourceCode = (
       }
       return found;
     });
-  let datasourceStr = `${datasource.datasource.replace(
-    /[\s-.]/g,
-    '_'
-  )}=datamesh.query(${JSON.stringify(make_query(datasource))})`;
+  let datasourceStr = datasource.datasource.replace(/[\s-.]/g, '_');
+  if (
+    datasource.variables ||
+    datasource.geofilter ||
+    datasource.timefilter ||
+    datasource.spatialref
+  ) {
+    datasourceStr += `=datamesh.query(${JSON.stringify(datasource)})`;
+  } else {
+    datasourceStr += `=datamesh.load_datasource('${datasource.datasource}')`;
+  }
   if (!datameshImport) {
     datasourceStr =
       'from oceanum.datamesh import Connector' +
