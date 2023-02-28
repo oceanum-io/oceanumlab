@@ -21,6 +21,20 @@ import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
+const datameshToken = (notebook: Notebook): string => {
+  const datameshTokenInjected =
+    notebook &&
+    notebook.widgets.find(cell => {
+      const line = cell.editor.getLine(0);
+      if (line && line.indexOf('DATAMESH_TOKEN=') >= 0) {
+        return true;
+      }
+    });
+  if (!datameshTokenInjected) {
+    return `DATAMESH_TOKEN='${window.datameshToken}';`;
+  }
+};
+
 const datasourceCode = (
   datasource: IDatasource,
   notebook: Notebook,
@@ -43,13 +57,18 @@ const datasourceCode = (
       return found;
     });
   let datasourceStr = datasource.datasource.replace(/[\s-.]/g, '_');
+  const tokenString = window.injectToken ? 'token=DATAMESH_TOKEN' : '';
   if (
     datasource.variables ||
     datasource.geofilter ||
     datasource.timefilter ||
     datasource.spatialref
   ) {
-    datasourceStr += `=datamesh.query(${JSON.stringify(datasource)})`;
+    datasourceStr += `=datamesh.query(${JSON.stringify(
+      datasource,
+      null,
+      '  '
+    ).replace(/null/g, 'None')})`;
   } else {
     datasourceStr += `=datamesh.load_datasource('${datasource.datasource}')`;
   }
@@ -57,7 +76,9 @@ const datasourceCode = (
     datasourceStr =
       'from oceanum.datamesh import Connector' +
       '\n' +
-      `datamesh=Connector("${window.datameshToken}")` +
+      '#Put your datamesh token in the Jupyterlab settings, or as argument in the constructor below' +
+      '\n' +
+      `datamesh=Connector(${tokenString})` +
       '\n' +
       datasourceStr;
   }
@@ -134,6 +155,25 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     );
   }
 
+  private injectToken = (notebookWidget: NotebookPanel): void => {
+    const notebookContent = notebookWidget.content as Notebook;
+    const datameshTokenInject = datameshToken(notebookContent);
+    if (datameshTokenInject) {
+      const tokenCell = notebookContent.model.contentFactory.createCodeCell({
+        cell: {
+          cell_type: 'code',
+          source: datameshTokenInject,
+          metadata: { tags: ['hide_input'] }
+        }
+      });
+      notebookContent.model.cells.insert(0, tokenCell);
+      CodeCell.execute(
+        notebookContent.widgets[0] as CodeCell,
+        notebookWidget.sessionContext
+      );
+    }
+  };
+
   // Handle code datasource insert into an editor
   private insertDatameshConnect = async (
     datasource: IDatasource
@@ -141,28 +181,28 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     const widget: Widget = this.props.getCurrentWidget();
     if (widget instanceof NotebookPanel) {
       const notebookWidget = widget as NotebookPanel;
-      const notebookCell = (notebookWidget.content as Notebook).activeCell;
-      const notebookCellIndex = (notebookWidget.content as Notebook)
-        .activeCellIndex;
+      const notebookContent = notebookWidget.content as Notebook;
+      const notebookCell = notebookContent.activeCell;
+      const notebookCellIndex = notebookContent.activeCellIndex;
       const notebookCellEditor = notebookCell.editor;
+
       const datasourceStr = datasourceCode(
         datasource,
-        notebookWidget.content as Notebook,
+        notebookContent,
         notebookCellIndex
       );
       if (notebookCell instanceof CodeCell) {
         this.verifyLanguageAndInsert(
-          datasource,
+          datasourceStr,
           'python',
-          notebookCellEditor,
-          notebookWidget.content,
-          notebookCellIndex
+          notebookCellEditor
         );
       } else {
         notebookCellEditor.replaceSelection(datasourceStr);
       }
-      const cell = notebookWidget.model.contentFactory.createCodeCell({});
-      notebookWidget.model.cells.insert(notebookCellIndex + 1, cell);
+      if (window.injectToken) {
+        this.injectToken(notebookWidget);
+      }
     } else {
       this.showErrDialog(
         'Datamesh datasource insert failed: Please select code cell'
@@ -172,18 +212,12 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
 
   // Handle language compatibility between code datasource and editor
   private verifyLanguageAndInsert = async (
-    datasource: IDatasource,
+    datasourceStr: string,
     editorLanguage: string,
-    editor: CodeEditor.IEditor,
-    notebook: Notebook,
-    icell: number
+    editor: CodeEditor.IEditor
   ): Promise<void> => {
-    const datasourceStr = datasourceCode(datasource, notebook, icell);
     if (editorLanguage && 'python' !== editorLanguage.toLowerCase()) {
-      const result = await this.showWarnDialog(
-        editorLanguage,
-        datasource.description
-      );
+      const result = await this.showWarnDialog(editorLanguage);
       if (result.button.accept) {
         editor.replaceSelection(datasourceStr);
       }
@@ -195,12 +229,11 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
 
   // Display warning dialog when inserting a code datasource incompatible with editor's language
   private showWarnDialog = async (
-    editorLanguage: string,
-    datasourceName: string
+    editorLanguage: string
   ): Promise<Dialog.IResult<string>> => {
     return showDialog({
       title: 'Warning',
-      body: `Datasource connect is incompatible with ${editorLanguage}. Continue?`,
+      body: `Datamesh connector is incompatible with ${editorLanguage}. Continue?`,
       buttons: [Dialog.cancelButton(), Dialog.okButton()]
     });
   };
@@ -335,7 +368,11 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   ): Promise<void> {
     const contentFactory = new NotebookModel.ContentFactory({});
     const model = contentFactory.createCodeCell({});
-    const content = datasourceCode(datasource, null, 0);
+    let content = datasourceCode(datasource, null, 0);
+    if (window.injectToken) {
+      const notebookPanel = this.props.getCurrentWidget() as NotebookPanel;
+      content = datameshToken(notebookPanel.content) + '\n' + content;
+    }
     model.value.text = content;
 
     this._drag = new Drag({
@@ -402,7 +439,6 @@ export class DatameshConnectWidget extends ReactWidget {
         name: event.data.name,
         data: event.data.data
       };
-      console.log(this.datameshWorkspaceSpec);
       this.renderSignal.emit(this.datameshWorkspaceSpec);
     }
   }

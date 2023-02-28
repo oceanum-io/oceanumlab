@@ -10,8 +10,14 @@
     "datameshToken": {
       "type": "string",
       "title": "Datamesh token",
-      "description": "Enter your datamesh token here. You can obtain this at https://home.oceanum.io/account",
+      "description": "Enter your Datamesh token here. You can obtain this at https://home.oceanum.io/account. You will need to reset your kernel after changing this setting.",
       "default": ""
+    },
+    "injectToken": {
+      "type": "boolean",
+      "title": "Inject token",
+      "description": "Inject Datamesh token into code.",
+      "default": false
     }
   },
   "additionalProperties": false

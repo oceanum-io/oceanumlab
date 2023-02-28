@@ -8,14 +8,22 @@ from jupyter_server.utils import url_path_join, ensure_async
 
 
 class EnvarsHandler(APIHandler):
-    # The following decorator should be present on all verb methods (head, get, post,
-    # patch, put, delete, options) to ensure only authorized user can request the
-    # Jupyter server
-    SUPPORTED_METHODS = ("GET",)
+    SUPPORTED_METHODS = ("GET", "POST")
 
     @tornado.web.authenticated
     def get(self, envar):
         self.finish(json.dumps({envar: os.environ.get(envar, None)}))
+
+    @tornado.web.authenticated
+    def post(self, *args, **kwargs):
+        body = json.loads(self.request.body)
+        if body:
+            try:
+                for key in body:
+                    os.environ[key] = body[key]
+            except:
+                self.send_error(400)
+        self.finish("OK")
 
 
 def setup_handlers(web_app, url_path):

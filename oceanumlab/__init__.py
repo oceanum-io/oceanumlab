@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from .handlers import setup_handlers
-from ._version import __version__
+
 
 HERE = Path(__file__).parent.resolve()
 
