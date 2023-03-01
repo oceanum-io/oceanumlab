@@ -1,11 +1,13 @@
+import os
 import json
 
 
 async def test_get_example(jp_fetch):
+    os.environ["TEST"] = "test"
     # When
-    response = await jp_fetch("oceanumlab", "env")
+    response = await jp_fetch("oceanum", "env", "TEST")
 
     # Then
     assert response.code == 200
     payload = json.loads(response.body)
-    assert payload == {"data": "This is /oceanumlab/get_example endpoint!"}
+    assert payload == {"TEST": "test"}
