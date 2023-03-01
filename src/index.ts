@@ -20,7 +20,7 @@ import '../style/index.css';
 import oceanumSvg from '../style/icons/oceanum.svg';
 
 declare global {
-  interface IWindow {
+  interface Window {
     datameshToken: string;
     injectToken: boolean;
   }
