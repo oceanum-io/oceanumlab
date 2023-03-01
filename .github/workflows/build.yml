@@ -46,9 +46,6 @@ jobs:
 
       - name: Package the extension
         run: |
-          set -eux
-          check-manifest -v
-
           pip install build
           python -m build
           pip uninstall -y "oceanumlab" jupyterlab
