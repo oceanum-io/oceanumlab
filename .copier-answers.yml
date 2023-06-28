@@ -1,0 +1,15 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v4.0.7
+_src_path: https://github.com/jupyterlab/extension-template
+author_email: developers@oceanum.science
+author_name: Oceanum
+has_binder: false
+has_settings: true
+kind: server
+labextension_name: '@oceanum/oceanumlab'
+project_short_description: A Jupyterlab extension to interact with the Oceanum.io
+    platform
+python_name: oceanumlab
+repository: https://github.com/oceanum-io/oceanumlab.git
+test: true
+

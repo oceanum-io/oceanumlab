@@ -1,19 +1,19 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import {
   Dialog,
-  showDialog,
   ReactWidget,
-  UseSignal
+  UseSignal,
+  showDialog
 } from '@jupyterlab/apputils';
 import { CodeCell } from '@jupyterlab/cells';
 import { CodeEditor } from '@jupyterlab/codeeditor';
 import * as nbformat from '@jupyterlab/nbformat';
 import { Notebook, NotebookModel, NotebookPanel } from '@jupyterlab/notebook';
-import { addIcon, LabIcon } from '@jupyterlab/ui-components';
+import { LabIcon, addIcon } from '@jupyterlab/ui-components';
 import { MimeData } from '@lumino/coreutils';
 import { Drag } from '@lumino/dragdrop';
-import { Widget } from '@lumino/widgets';
 import { Signal } from '@lumino/signaling';
+import { Widget } from '@lumino/widgets';
 
 import React from 'react';
 
@@ -25,13 +25,17 @@ const datameshToken = (notebook: Notebook): string => {
   const datameshTokenInjected =
     notebook &&
     notebook.widgets.find(cell => {
-      const line = cell.editor.getLine(0);
-      if (line && line.indexOf('DATAMESH_TOKEN=') >= 0) {
-        return true;
+      if (cell.editor) {
+        const line = cell.editor.getLine(0);
+        if (line && line.indexOf('DATAMESH_TOKEN=') >= 0) {
+          return true;
+        }
       }
     });
   if (!datameshTokenInjected) {
     return `DATAMESH_TOKEN='${window.datameshToken}';`;
+  } else {
+    return '';
   }
 };
 
@@ -43,18 +47,20 @@ const datasourceCode = (
   const datameshImport =
     notebook &&
     notebook.widgets.find(cell => {
-      let found = false;
-      for (let i = 0; i < icell; i++) {
-        const line = cell.editor.getLine(i);
-        if (
-          line &&
-          line.indexOf('from oceanum.datamesh import Connector') >= 0
-        ) {
-          found = true;
-          break;
+      if (cell.editor) {
+        let found = false;
+        for (let i = 0; i < icell; i++) {
+          const line = cell.editor.getLine(i);
+          if (
+            line &&
+            line.indexOf('from oceanum.datamesh import Connector') >= 0
+          ) {
+            found = true;
+            break;
+          }
         }
+        return found;
       }
-      return found;
     });
   let datasourceStr = datasource.datasource.replace(/[\s-.]/g, '_');
   const tokenString = window.injectToken ? 'token=DATAMESH_TOKEN' : '';
