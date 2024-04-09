@@ -125,3 +125,5 @@ dmypy.json
 .yarn/
 
 .vscode
+
+_temp_extension

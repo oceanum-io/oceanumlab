@@ -4,7 +4,7 @@
   "jupyter.lab.setting-icon-label": "Oceanum",
   "title": "Oceanum.io",
   "icon": "oceanum",
-  "description": "oceanumlab settings.",
+  "description": "Oceanumlab settings.",
   "type": "object",
   "properties": {
     "datameshToken": {

@@ -19,6 +19,8 @@ import '../style/index.css';
 
 import oceanumSvg from '../style/icons/oceanum.svg';
 
+const PLUGIN_ID = '@oceanum/oceanumlab:datamesh-connect';
+
 declare global {
   interface Window {
     datameshToken: string;
@@ -35,7 +37,7 @@ const oceanumIcon = new LabIcon({
  * Initialization data for the extension.
  */
 export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
-  id: 'datamesh-connect',
+  id: PLUGIN_ID,
   autoStart: true,
   requires: [
     ICommandPalette,
@@ -72,10 +74,19 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     };
     //Try to get the datamesh token from the envars
 
-    settingRegistry.load('@oceanum/oceanumlab:plugin').then(set => {
-      set.changed.connect(updateSettings, this);
-      updateSettings(set);
-    });
+    Promise.all([app.restored, settingRegistry.load(PLUGIN_ID)])
+      .then(([, setting]) => {
+        // Read the settings
+        updateSettings(setting);
+
+        // Listen for your plugin setting changes using Signal
+        setting.changed.connect(updateSettings);
+      })
+      .catch(reason => {
+        console.error(
+          `Something went wrong when reading the Oceanumlab settings.\n${reason}`
+        );
+      });
 
     const getCurrentWidget = (): Widget => {
       return app.shell.currentWidget;
