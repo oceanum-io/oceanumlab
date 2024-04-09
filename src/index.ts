@@ -21,18 +21,6 @@ import oceanumSvg from '../style/icons/oceanum.svg';
 
 const PLUGIN_ID = '@oceanum/oceanumlab:datamesh-connect';
 
-declare global {
-  interface Window {
-    datameshToken: string;
-    injectToken: boolean;
-  }
-}
-
-const oceanumIcon = new LabIcon({
-  name: 'oceanum:main',
-  svgstr: oceanumSvg
-});
-
 /**
  * Initialization data for the extension.
  */

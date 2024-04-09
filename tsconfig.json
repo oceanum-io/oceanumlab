@@ -16,10 +16,15 @@
     "outDir": "lib",
     "rootDir": "src",
     "strict": true,
+<<<<<<< before updating
     "strictNullChecks": false,
     "target": "ES2018",
     "types": ["jest"],
     "baseUrl": "."
+=======
+    "strictNullChecks": true,
+    "target": "ES2018"
+>>>>>>> after updating
   },
   "include": ["src/*"]
 }
