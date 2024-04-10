@@ -47,11 +47,7 @@ The `jlpm` command is JupyterLab's pinned version of
 # Clone the repo to your local environment
 # Change directory to the oceanumlab directory
 # Install package in development mode
-<<<<<<< before updating
-pip install -e .
-=======
 pip install -e "."
->>>>>>> after updating
 # Link your development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
 # Rebuild extension Typescript source after making changes
@@ -87,7 +83,6 @@ folder is located. Then you can remove the symlink named `oceanumlab` within tha
 
 ### Testing the extension
 
-<<<<<<< before updating
 #### Server tests
 
 This extension is using [Pytest](https://docs.pytest.org/) for Python code testing.
@@ -104,8 +99,6 @@ To execute them, run:
 pytest -vv -r ap --cov oceanumlab
 ```
 
-=======
->>>>>>> after updating
 #### Frontend tests
 
 This extension is using [Jest](https://jestjs.io/) for JavaScript code testing.

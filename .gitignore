@@ -127,3 +127,4 @@ dmypy.json
 .vscode
 
 _temp_extension
+.pypirc

@@ -27,7 +27,7 @@
     "style": "style/index.css",
     "repository": {
         "type": "git",
-        "url": "https://github.com/oceanum-io/oceanumlab.git.git"
+        "url": "https://github.com/oceanum-io/oceanumlab.git"
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:labextension:dev",
@@ -58,7 +58,8 @@
     },
     "dependencies": {
         "@jupyterlab/application": "^4.1.6",
-        "@jupyterlab/settingregistry": "^4.1.6"
+        "@jupyterlab/settingregistry": "^4.1.6",
+        "@phosphor-icons/react": "^2.1.4"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.1.6",
@@ -98,7 +99,8 @@
     "jupyterlab": {
         "extension": true,
         "outputDir": "oceanumlab/labextension",
-        "schemaDir": "schema"
+        "schemaDir": "schema",
+        "webpackConfig": "./webpack.config.js"
     },
     "eslintIgnore": [
         "node_modules",
@@ -125,9 +127,9 @@
             "@typescript-eslint"
         ],
         "base": {
-          "name": "oceanumlab"
+            "name": "oceanumlab"
         }
-      },
+    },
     "prettier": {
         "singleQuote": true,
         "trailingComma": "none",
@@ -159,5 +161,4 @@
             "value-no-vendor-prefix": null
         }
     }
-  }
-
+}

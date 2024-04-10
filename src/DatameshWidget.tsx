@@ -8,7 +8,8 @@ import {
 import { CodeCell } from '@jupyterlab/cells';
 import { CodeEditor } from '@jupyterlab/codeeditor';
 import * as nbformat from '@jupyterlab/nbformat';
-import { Notebook, NotebookModel, NotebookPanel } from '@jupyterlab/notebook';
+import { Notebook, NotebookPanel } from '@jupyterlab/notebook';
+import { CodeCellModel } from '@jupyterlab/cells';
 import { LabIcon, addIcon } from '@jupyterlab/ui-components';
 import { MimeData } from '@lumino/coreutils';
 import { Drag } from '@lumino/dragdrop';
@@ -20,6 +21,9 @@ import React from 'react';
 import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
+
+const DRAG_IMAGE=new Image();
+DRAG_IMAGE.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iIzAwMDAwMCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik02OS4xMiw5NC4xNSwyOC41LDEyOGw0MC42MiwzMy44NWE4LDgsMCwxLDEtMTAuMjQsMTIuMjlsLTQ4LTQwYTgsOCwwLDAsMSwwLTEyLjI5bDQ4LTQwYTgsOCwwLDAsMSwxMC4yNCwxMi4zWm0xNzYsMjcuNy00OC00MGE4LDgsMCwxLDAtMTAuMjQsMTIuM0wyMjcuNSwxMjhsLTQwLjYyLDMzLjg1YTgsOCwwLDEsMCwxMC4yNCwxMi4yOWw0OC00MGE4LDgsMCwwLDAsMC0xMi4yOVpNMTYyLjczLDMyLjQ4YTgsOCwwLDAsMC0xMC4yNSw0Ljc5bC02NCwxNzZhOCw4LDAsMCwwLDQuNzksMTAuMjZBOC4xNCw4LjE0LDAsMCwwLDk2LDIyNGE4LDgsMCwwLDAsNy41Mi01LjI3bDY0LTE3NkE4LDgsMCwwLDAsMTYyLjczLDMyLjQ4WiI+PC9wYXRoPjwvc3ZnPg==';
 
 const datameshToken = (notebook: Notebook): string => {
   const datameshTokenInjected =
@@ -130,6 +134,9 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     this._evtMouseUp = this._evtMouseUp.bind(this);
   }
 
+  private _drag: Drag | null;
+  private _dragData: { pressX: number; pressY: number; dragImage: HTMLElement } | null;
+
   render(): React.ReactElement {
     return (
       <div className={'datamesh-workspace-display'}>
@@ -164,19 +171,23 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   private injectToken = (notebookWidget: NotebookPanel): void => {
     const notebookContent = notebookWidget.content as Notebook;
     const datameshTokenInject = datameshToken(notebookContent);
+    //const codeCell=new CodeCellModel({});
     if (datameshTokenInject) {
-      const tokenCell = notebookContent.model.contentFactory.createCodeCell({
-        cell: {
-          cell_type: 'code',
-          source: datameshTokenInject,
-          metadata: { tags: ['hide_input'] }
-        }
+      // const tokenCell = notebookContent.contentFactory.createCodeCell({
+      //   model: codeCell,
+      //   rendermime: notebookContent.rendermime,
+      //   contentFactory: notebookContent.contentFactory,
+      // })
+      // tokenCell.model.sharedModel.setSource(datameshTokenInject);
+      notebookContent.model?.sharedModel.insertCell(0, {
+        cell_type:'code',
+        source: datameshTokenInject,
+        metadata: {},
       });
-      notebookContent.model.cells.insert(0, tokenCell);
-      CodeCell.execute(
-        notebookContent.widgets[0] as CodeCell,
-        notebookWidget.sessionContext
-      );
+      // CodeCell.execute(
+      //   notebookContent.widgets[0] as CodeCell,
+      //   notebookWidget.sessionContext
+      // );
     }
   };
 
@@ -197,22 +208,24 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
         notebookContent,
         notebookCellIndex
       );
-      if (notebookCell instanceof CodeCell) {
-        this.verifyLanguageAndInsert(
-          datasourceStr,
-          'python',
-          notebookCellEditor
-        );
+      if (notebookCellEditor) {
+        if (notebookCell instanceof CodeCell) {
+          this.verifyLanguageAndInsert(
+            datasourceStr,
+            'python',
+            notebookCellEditor
+          );
+        } else {
+          notebookCellEditor.replaceSelection(datasourceStr);
+        }
+        if (window.injectToken) {
+          this.injectToken(notebookWidget);
+        }
       } else {
-        notebookCellEditor.replaceSelection(datasourceStr);
+        this.showErrDialog(
+          'Datamesh datasource insert failed: Please select code cell'
+        );
       }
-      if (window.injectToken) {
-        this.injectToken(notebookWidget);
-      }
-    } else {
-      this.showErrDialog(
-        'Datamesh datasource insert failed: Please select code cell'
-      );
     }
   };
 
@@ -222,14 +235,14 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     editorLanguage: string,
     editor: CodeEditor.IEditor
   ): Promise<void> => {
-    if (editorLanguage && 'python' !== editorLanguage.toLowerCase()) {
+    if (editor && editorLanguage && 'python' !== editorLanguage.toLowerCase()) {
       const result = await this.showWarnDialog(editorLanguage);
       if (result.button.accept) {
         editor.replaceSelection(datasourceStr);
       }
     } else {
       // Language match or editorLanguage is unavailable
-      editor.replaceSelection(datasourceStr);
+      editor?.replaceSelection(datasourceStr);
     }
   };
 
@@ -268,7 +281,7 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     this._dragData = {
       pressX: event.clientX,
       pressY: event.clientY,
-      dragImage: null
+      dragImage: DRAG_IMAGE
     };
 
     const mouseUpListener = (event: MouseEvent): void => {
@@ -372,14 +385,20 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     clientX: number,
     clientY: number
   ): Promise<void> {
-    const contentFactory = new NotebookModel.ContentFactory({});
-    const model = contentFactory.createCodeCell({});
-    let content = datasourceCode(datasource, null, 0);
+    const notebookPanel: NotebookPanel = this.props.getCurrentWidget() as NotebookPanel;
+    const notebookContent = notebookPanel.content as Notebook;
+    const codeCell=new CodeCellModel({});
+    const cell = notebookContent.contentFactory.createCodeCell({
+      model: codeCell,
+      rendermime: notebookContent.rendermime,
+      contentFactory: notebookContent.contentFactory
+    });
+    let content = datasourceCode(datasource, notebookContent, 0);
     if (window.injectToken) {
       const notebookPanel = this.props.getCurrentWidget() as NotebookPanel;
       content = datameshToken(notebookPanel.content) + '\n' + content;
     }
-    model.value.text = content;
+    cell.model.sharedModel.setSource(content);
 
     this._drag = new Drag({
       mimeData: new MimeData(),
@@ -389,7 +408,7 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
       source: this
     });
 
-    const selected: nbformat.ICell[] = [model.toJSON()];
+    const selected: nbformat.ICell[] = [cell.model.toJSON()];
     this._drag.mimeData.setData(JUPYTER_CELL_MIME, selected);
     this._drag.mimeData.setData('text/plain', datasource.description);
 
@@ -398,9 +417,6 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
       this._dragData = null;
     });
   }
-
-  private _drag: Drag;
-  private _dragData: { pressX: number; pressY: number; dragImage: HTMLElement };
 }
 
 /**

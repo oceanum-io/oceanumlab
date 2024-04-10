@@ -3,7 +3,7 @@
   "jupyter.lab.setting-icon": "oceanum:main",
   "jupyter.lab.setting-icon-label": "Oceanum",
   "title": "Oceanum.io",
-  "icon": "oceanum",
+  "icon": "oceanum-io",
   "description": "Oceanumlab settings.",
   "type": "object",
   "properties": {

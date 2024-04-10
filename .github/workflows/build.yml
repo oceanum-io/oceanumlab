@@ -40,6 +40,10 @@ jobs:
         set -eux
         python -m pip install .[test]
 
+        pytest -vv -r ap --cov oceanumlab
+        jupyter server extension list
+        jupyter server extension list 2>&1 | grep -ie "oceanumlab.*OK"
+
         jupyter labextension list
         jupyter labextension list 2>&1 | grep -ie "@oceanum/oceanumlab.*OK"
         python -m jupyterlab.browser_check
@@ -81,6 +85,9 @@ jobs:
 
         pip install "jupyterlab>=4.0.0,<5" oceanumlab*.whl
 
+
+        jupyter server extension list
+        jupyter server extension list 2>&1 | grep -ie "oceanumlab.*OK"
 
         jupyter labextension list
         jupyter labextension list 2>&1 | grep -ie "@oceanum/oceanumlab.*OK"

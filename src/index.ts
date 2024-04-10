@@ -18,6 +18,10 @@ import { DatameshUI } from './DatameshUI';
 import '../style/index.css';
 
 import oceanumSvg from '../style/icons/oceanum.svg';
+const oceanumIcon = new LabIcon({
+  name: 'oceanum:icon',
+  svgstr: oceanumSvg
+});
 
 const PLUGIN_ID = '@oceanum/oceanumlab:datamesh-connect';
 
@@ -77,7 +81,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       });
 
     const getCurrentWidget = (): Widget => {
-      return app.shell.currentWidget;
+      return app.shell!.currentWidget!;
     };
 
     const openDatameshUI = (event: any): void => {
