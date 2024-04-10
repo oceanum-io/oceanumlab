@@ -5,15 +5,14 @@ import {
   ILabStatus
 } from '@jupyterlab/application';
 import { ICommandPalette, IThemeManager } from '@jupyterlab/apputils';
-import { URLExt } from '@jupyterlab/coreutils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
-import { ServerConnection } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
+import { requestAPI } from './handler';
 
 import '../style/index.css';
 
@@ -50,15 +49,12 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     console.log('Oceanum datamesh connect extension is loaded');
 
     //Try to get the datamesh token from the settings
-    const serversettings = ServerConnection.makeSettings();
-    const requestUrl = URLExt.join(serversettings.baseUrl, 'oceanum', 'env');
     const updateSettings = (set: ISettingRegistry.ISettings) => {
       const token = set.get('datameshToken');
       if (token && token.user) {
         window.datameshToken = token.user as string;
-        fetch(requestUrl + '/', {
+        requestAPI('env/', {
           method: 'POST',
-          headers: { authorization: `Token ${serversettings.token}` },
           body: JSON.stringify({ DATAMESH_TOKEN: token.user })
         }).then(res => console.log(res));
       }
