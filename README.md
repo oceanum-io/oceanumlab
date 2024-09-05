@@ -15,7 +15,7 @@ A Jupyterlab extension to interact with the Oceanum.io platform
 
 ## Requirements
 
-- JupyterLab >= 3.0
+- JupyterLab >= 4.0
 
 ## Install
 

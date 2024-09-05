@@ -22,8 +22,9 @@ import { DatasourceItem } from './DatasourceItem';
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
-const DRAG_IMAGE=new Image();
-DRAG_IMAGE.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iIzAwMDAwMCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik02OS4xMiw5NC4xNSwyOC41LDEyOGw0MC42MiwzMy44NWE4LDgsMCwxLDEtMTAuMjQsMTIuMjlsLTQ4LTQwYTgsOCwwLDAsMSwwLTEyLjI5bDQ4LTQwYTgsOCwwLDAsMSwxMC4yNCwxMi4zWm0xNzYsMjcuNy00OC00MGE4LDgsMCwxLDAtMTAuMjQsMTIuM0wyMjcuNSwxMjhsLTQwLjYyLDMzLjg1YTgsOCwwLDEsMCwxMC4yNCwxMi4yOWw0OC00MGE4LDgsMCwwLDAsMC0xMi4yOVpNMTYyLjczLDMyLjQ4YTgsOCwwLDAsMC0xMC4yNSw0Ljc5bC02NCwxNzZhOCw4LDAsMCwwLDQuNzksMTAuMjZBOC4xNCw4LjE0LDAsMCwwLDk2LDIyNGE4LDgsMCwwLDAsNy41Mi01LjI3bDY0LTE3NkE4LDgsMCwwLDAsMTYyLjczLDMyLjQ4WiI+PC9wYXRoPjwvc3ZnPg==';
+const DRAG_IMAGE = new Image();
+DRAG_IMAGE.src =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgZmlsbD0iIzAwMDAwMCIgdmlld0JveD0iMCAwIDI1NiAyNTYiPjxwYXRoIGQ9Ik02OS4xMiw5NC4xNSwyOC41LDEyOGw0MC42MiwzMy44NWE4LDgsMCwxLDEtMTAuMjQsMTIuMjlsLTQ4LTQwYTgsOCwwLDAsMSwwLTEyLjI5bDQ4LTQwYTgsOCwwLDAsMSwxMC4yNCwxMi4zWm0xNzYsMjcuNy00OC00MGE4LDgsMCwxLDAtMTAuMjQsMTIuM0wyMjcuNSwxMjhsLTQwLjYyLDMzLjg1YTgsOCwwLDEsMCwxMC4yNCwxMi4yOWw0OC00MGE4LDgsMCwwLDAsMC0xMi4yOVpNMTYyLjczLDMyLjQ4YTgsOCwwLDAsMC0xMC4yNSw0Ljc5bC02NCwxNzZhOCw4LDAsMCwwLDQuNzksMTAuMjZBOC4xNCw4LjE0LDAsMCwwLDk2LDIyNGE4LDgsMCwwLDAsNy41Mi01LjI3bDY0LTE3NkE4LDgsMCwwLDAsMTYyLjczLDMyLjQ4WiI+PC9wYXRoPjwvc3ZnPg==';
 
 const datameshToken = (notebook: Notebook): string => {
   const datameshTokenInjected =
@@ -66,7 +67,10 @@ const datasourceCode = (
         return found;
       }
     });
-  let datasourceStr = datasource.datasource.replace(/[\s-.]/g, '_');
+  let datasourceStr = (datasource.label || datasource.datasource).replace(
+    /[\s-.]/g,
+    '_'
+  );
   const tokenString = window.injectToken ? 'token=DATAMESH_TOKEN' : '';
   if (
     datasource.variables ||
@@ -97,6 +101,7 @@ const datasourceCode = (
 
 export interface IDatasource {
   id: string;
+  label: string;
   datasource: string;
   description: string;
   variables?: string[];
@@ -135,7 +140,11 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 
   private _drag: Drag | null;
-  private _dragData: { pressX: number; pressY: number; dragImage: HTMLElement } | null;
+  private _dragData: {
+    pressX: number;
+    pressY: number;
+    dragImage: HTMLElement;
+  } | null;
 
   render(): React.ReactElement {
     return (
@@ -180,9 +189,9 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
       // })
       // tokenCell.model.sharedModel.setSource(datameshTokenInject);
       notebookContent.model?.sharedModel.insertCell(0, {
-        cell_type:'code',
+        cell_type: 'code',
         source: datameshTokenInject,
-        metadata: {},
+        metadata: {}
       });
       // CodeCell.execute(
       //   notebookContent.widgets[0] as CodeCell,
@@ -385,9 +394,10 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
     clientX: number,
     clientY: number
   ): Promise<void> {
-    const notebookPanel: NotebookPanel = this.props.getCurrentWidget() as NotebookPanel;
+    const notebookPanel: NotebookPanel =
+      this.props.getCurrentWidget() as NotebookPanel;
     const notebookContent = notebookPanel.content as Notebook;
-    const codeCell=new CodeCellModel({});
+    const codeCell = new CodeCellModel({});
     const cell = notebookContent.contentFactory.createCodeCell({
       model: codeCell,
       rendermime: notebookContent.rendermime,

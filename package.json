@@ -1,6 +1,6 @@
 {
     "name": "@oceanum/oceanumlab",
-    "version": "4.0.2",
+    "version": "4.0.3",
     "description": "A Jupyterlab extension to interact with the Oceanum.io platform",
     "keywords": [
         "jupyter",
