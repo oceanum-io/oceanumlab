@@ -1,10 +1,9 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { INotebookTracker } from '@jupyterlab/notebook';
 
-export interface CodeResponse {
-  explanation: string;
-  code: string;
-}
+export type OceanumResponse =
+  | { type: 'text'; message: string }
+  | { type: 'code'; explanation: string; code: string };
 
 export class ChatRouterError extends Error {
   constructor(
@@ -22,7 +21,7 @@ export class ChatRouter {
     private _notebookTracker: INotebookTracker
   ) {}
 
-  async route(prompt: string): Promise<CodeResponse> {
+  async route(prompt: string): Promise<OceanumResponse> {
     const token = this._settings.get('datameshToken').composite as string;
     const backendUrl = this._settings.get('backendUrl').composite as string;
 
@@ -77,6 +76,6 @@ export class ChatRouter {
     }
 
     const data = await response.json();
-    return data as CodeResponse;
+    return data as OceanumResponse;
   }
 }

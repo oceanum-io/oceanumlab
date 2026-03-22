@@ -1,6 +1,6 @@
 import { INotebookTracker, NotebookActions } from '@jupyterlab/notebook';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { CodeResponse } from './chatRouter';
+import { OceanumResponse } from './chatRouter';
 
 export class KernelHandoff {
   constructor(
@@ -12,9 +12,14 @@ export class KernelHandoff {
    * Insert the generated code into a new cell and optionally execute it.
    * Returns a message to display in the chat UI.
    */
-  async inject(response: CodeResponse): Promise<string> {
-    const notebookPanel = this._notebookTracker.currentWidget;
+  async inject(response: OceanumResponse): Promise<string> {
+    if (response.type === 'text') {
+      // Text-only response — just return the message for the chat window
+      return response.message;
+    }
 
+    // Code response — insert cell and return explanation for chat
+    const notebookPanel = this._notebookTracker.currentWidget;
     if (!notebookPanel) {
       return response.explanation;
     }
