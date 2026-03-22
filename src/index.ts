@@ -110,6 +110,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       name: 'Datamesh Connect',
       icon: oceanumIcon,
       openDatameshUI: openDatameshUI,
+      commands: app.commands,
       getCurrentWidget
     });
     datameshConnectWidget.id = 'datamesh-connect';

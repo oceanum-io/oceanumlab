@@ -11,6 +11,7 @@ import * as nbformat from '@jupyterlab/nbformat';
 import { Notebook, NotebookPanel } from '@jupyterlab/notebook';
 import { CodeCellModel } from '@jupyterlab/cells';
 import { LabIcon, addIcon } from '@jupyterlab/ui-components';
+import { CommandRegistry } from '@lumino/commands';
 import { MimeData } from '@lumino/coreutils';
 import { Drag } from '@lumino/dragdrop';
 import { Signal } from '@lumino/signaling';
@@ -429,6 +430,109 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 }
 
+interface IChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface IAIChatPanelProps {
+  commands: CommandRegistry;
+}
+
+function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
+  const [messages, setMessages] = React.useState<IChatMessage[]>([]);
+  const [input, setInput] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const handleSubmit = async (): Promise<void> => {
+    const prompt = input.trim();
+    if (!prompt || loading) return;
+
+    setInput('');
+    setError(null);
+    setMessages(prev => [...prev, { role: 'user', content: prompt }]);
+    setLoading(true);
+
+    try {
+      const result = await commands.execute('oceanum-ai:submit-prompt', { prompt });
+      const explanation = (result as string) ?? '';
+      setMessages(prev => [...prev, { role: 'assistant', content: explanation }]);
+    } catch (err: any) {
+      setError(err?.message ?? 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleSubmit();
+    }
+  };
+
+  return (
+    <div className="oceanum-ai-chat">
+      <div className="oceanum-ai-chat-header">
+        <span>Oceanum AI</span>
+      </div>
+      <div className="oceanum-ai-chat-messages">
+        {messages.length === 0 && (
+          <div className="oceanum-ai-chat-empty">
+            Ask Oceanum AI to query and visualise data from the Datamesh.
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`oceanum-ai-chat-message oceanum-ai-chat-message--${msg.role}`}
+          >
+            <span className="oceanum-ai-chat-role">
+              {msg.role === 'user' ? 'You' : 'AI'}
+            </span>
+            <pre className="oceanum-ai-chat-content">{msg.content}</pre>
+          </div>
+        ))}
+        {loading && (
+          <div className="oceanum-ai-chat-message oceanum-ai-chat-message--assistant">
+            <span className="oceanum-ai-chat-role">AI</span>
+            <span className="oceanum-ai-chat-loading">Thinking…</span>
+          </div>
+        )}
+        {error && (
+          <div className="oceanum-ai-chat-error">{error}</div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="oceanum-ai-chat-input-area">
+        <textarea
+          className="oceanum-ai-chat-input"
+          rows={3}
+          placeholder="Ask Oceanum AI… (Enter to send, Shift+Enter for newline)"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={loading}
+        />
+        <button
+          className="jp-mod-styled oceanum-ai-chat-send"
+          onClick={() => void handleSubmit()}
+          disabled={loading || !input.trim()}
+        >
+          {loading ? '…' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * DatameshConnectWidget props.
  */
@@ -437,7 +541,7 @@ export interface IDatameshWidgetProps {
   name: string;
   icon: LabIcon;
   openDatameshUI: any;
-
+  commands: CommandRegistry;
   getCurrentWidget: () => Widget;
 }
 
@@ -498,8 +602,8 @@ export class DatameshConnectWidget extends ReactWidget {
 
   render(): React.ReactElement {
     return (
-      <div className={'datamesh-connect'}>
-        <header className={'datamesh-connect-header'}>
+      <div className="datamesh-connect">
+        <header className="datamesh-connect-header">
           <this.props.icon.react
             tag="span"
             width="auto"
@@ -507,20 +611,24 @@ export class DatameshConnectWidget extends ReactWidget {
             verticalAlign="middle"
             marginRight="5px"
           />
-          <p> Datamesh workspace </p>
+          <p>Datamesh workspace</p>
           <div
             className="open-datamesh-ui"
             onClick={this.props.openDatameshUI}
-            title={'Open Datamesh UI'}
+            title="Open Datamesh UI"
           >
             {<addIcon.react height="24px" verticalAlign="middle" />}
           </div>
         </header>
-        <UseSignal signal={this.renderSignal} initialArgs={null}>
-          {(_, datameshWorkspace): React.ReactElement =>
-            this.renderDisplay(datameshWorkspace)
-          }
-        </UseSignal>
+        <div className="datamesh-connect-workspace">
+          <UseSignal signal={this.renderSignal} initialArgs={null}>
+            {(_, datameshWorkspace): React.ReactElement =>
+              this.renderDisplay(datameshWorkspace)
+            }
+          </UseSignal>
+        </div>
+        <div className="datamesh-connect-divider" />
+        <AIChatPanel commands={this.props.commands} />
       </div>
     );
   }
