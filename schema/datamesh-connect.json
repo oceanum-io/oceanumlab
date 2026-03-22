@@ -3,20 +3,31 @@
   "jupyter.lab.setting-icon": "oceanum:icon",
   "jupyter.lab.setting-icon-label": "Oceanum",
   "title": "Oceanum.io",
-  "icon": "oceanum-io",
-  "description": "Oceanumlab settings.",
+  "description": "Oceanum.io JupyterLab extension settings",
   "type": "object",
   "properties": {
     "datameshToken": {
       "type": "string",
       "title": "Datamesh token",
-      "description": "Enter your Datamesh token here. You can obtain this at https://home.oceanum.io/account. You will need to reset your kernel after changing this setting.",
+      "description": "Your Oceanum Datamesh token or JWT. Obtain at https://home.oceanum.io/account.",
       "default": ""
     },
     "injectToken": {
       "type": "boolean",
       "title": "Inject token",
       "description": "Inject Datamesh token into code.",
+      "default": false
+    },
+    "backendUrl": {
+      "type": "string",
+      "title": "Oceanum AI backend URL",
+      "description": "URL of the Oceanum AI FastAPI backend.",
+      "default": "http://localhost:8000"
+    },
+    "autoRunCode": {
+      "type": "boolean",
+      "title": "Auto-run generated code",
+      "description": "Automatically execute the injected code cell after generation.",
       "default": false
     }
   },

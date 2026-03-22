@@ -4,15 +4,18 @@ import {
   ILayoutRestorer,
   ILabStatus
 } from '@jupyterlab/application';
-import { ICommandPalette, IThemeManager } from '@jupyterlab/apputils';
+import { ICommandPalette, IThemeManager, Notification } from '@jupyterlab/apputils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
+import { INotebookTracker } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
+import { ChatRouter, ChatRouterError } from './chatRouter';
+import { KernelHandoff } from './kernelHandoff';
 
 import '../style/index.css';
 
@@ -127,4 +130,57 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default datamesh_connect_extension;
+/**
+ * Second plugin: Oceanum AI chat integration.
+ * Wires ChatRouter → KernelHandoff and exposes the
+ * `oceanum-ai:submit-prompt` command.
+ */
+export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
+  id: '@oceanum/oceanumlab:ai-chat',
+  autoStart: true,
+  requires: [INotebookTracker, ISettingRegistry],
+  activate: (
+    app: JupyterFrontEnd,
+    notebookTracker: INotebookTracker,
+    settingRegistry: ISettingRegistry
+  ) => {
+    console.log('Oceanum AI chat extension is loaded');
+
+    const SETTINGS_ID = '@oceanum/oceanumlab:datamesh-connect';
+
+    settingRegistry
+      .load(SETTINGS_ID)
+      .then(settings => {
+        const router = new ChatRouter(settings, notebookTracker);
+        const handoff = new KernelHandoff(notebookTracker, settings);
+
+        app.commands.addCommand('oceanum-ai:submit-prompt', {
+          label: 'Submit prompt to Oceanum AI',
+          execute: async (args: Record<string, unknown>) => {
+            const prompt = args['prompt'] as string | undefined;
+            if (!prompt) {
+              return;
+            }
+            try {
+              const response = await router.route(prompt);
+              const explanation = await handoff.inject(response);
+              return explanation;
+            } catch (err) {
+              if (err instanceof ChatRouterError) {
+                Notification.error(err.message, { autoClose: 5000 });
+              } else {
+                console.error('Oceanum AI: unexpected error', err);
+              }
+            }
+          }
+        });
+      })
+      .catch(reason => {
+        console.error(
+          `Oceanum AI: could not load settings from ${SETTINGS_ID}.\n${reason}`
+        );
+      });
+  }
+};
+
+export default [datamesh_connect_extension, oceanum_ai_extension];
