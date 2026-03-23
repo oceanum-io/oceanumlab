@@ -1,9 +1,16 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { INotebookTracker } from '@jupyterlab/notebook';
+import { CodeCell } from '@jupyterlab/cells';
 
 export type OceanumResponse =
   | { type: 'text'; message: string }
-  | { type: 'code'; explanation: string; code: string };
+  | { type: 'code'; message: string; code: string }
+  | { type: 'markdown'; content: string; message?: string };
+
+export interface RouteResult {
+  response: OceanumResponse;
+  hasCodeCellSelected: boolean;
+}
 
 export class ChatRouterError extends Error {
   constructor(
@@ -21,7 +28,7 @@ export class ChatRouter {
     private _notebookTracker: INotebookTracker
   ) {}
 
-  async route(prompt: string): Promise<OceanumResponse> {
+  async route(prompt: string): Promise<RouteResult> {
     const token = this._settings.get('datameshToken').composite as string;
     const backendUrl = this._settings.get('backendUrl').composite as string;
 
@@ -33,16 +40,30 @@ export class ChatRouter {
 
     // Get active cell source as context (best-effort)
     let context = '';
+    let isCodeCell = false;
     try {
       const notebook = this._notebookTracker.currentWidget?.content;
       if (notebook?.activeCell) {
-        context = notebook.activeCell.model.sharedModel.getSource();
+        const activeCell = notebook.activeCell;
+        context = activeCell.model.sharedModel.getSource();
+        isCodeCell = activeCell instanceof CodeCell;
       }
     } catch {
       // context is optional — never throw
     }
 
-    const url = `${backendUrl.replace(/\/$/, '')}/api/generate-code`;
+    const url = `${backendUrl.replace(/\/$/, '')}/api/chat`;
+
+    // Send code context with explicit label for the AI
+    const payload: { prompt: string; context?: string; codeContext?: string } =
+      { prompt };
+    if (context) {
+      if (isCodeCell) {
+        payload.codeContext = context;
+      } else {
+        payload.context = context;
+      }
+    }
 
     let response: Response;
     try {
@@ -52,7 +73,7 @@ export class ChatRouter {
           'Content-Type': 'application/json',
           'X-Datamesh-Token': token
         },
-        body: JSON.stringify({ prompt, context: context || undefined })
+        body: JSON.stringify(payload)
       });
     } catch {
       throw new ChatRouterError(
@@ -76,6 +97,9 @@ export class ChatRouter {
     }
 
     const data = await response.json();
-    return data as OceanumResponse;
+    return {
+      response: data as OceanumResponse,
+      hasCodeCellSelected: isCodeCell && context.trim().length > 0
+    };
   }
 }

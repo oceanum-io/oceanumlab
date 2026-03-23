@@ -18,8 +18,35 @@ import { Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
 
 import React from 'react';
+import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true
+});
+
+/**
+ * Renders markdown content safely using dangerouslySetInnerHTML.
+ */
+function MarkdownContent({ content }: { content: string }): React.ReactElement {
+  const html = React.useMemo(() => {
+    try {
+      return marked.parse(content) as string;
+    } catch {
+      return content;
+    }
+  }, [content]);
+
+  return (
+    <div
+      className="oceanum-ai-chat-content oceanum-ai-markdown"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 const JUPYTER_CELL_MIME = 'application/vnd.jupyter.cells';
 
@@ -446,6 +473,11 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
   const [error, setError] = React.useState<string | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
+  // Chat history navigation
+  const [history, setHistory] = React.useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = React.useState(-1);
+  const [tempInput, setTempInput] = React.useState('');
+
   // Auto-scroll to bottom when messages change
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -455,15 +487,25 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
     const prompt = input.trim();
     if (!prompt || loading) return;
 
+    // Add to history
+    setHistory(prev => [...prev, prompt]);
+    setHistoryIndex(-1);
+    setTempInput('');
+
     setInput('');
     setError(null);
     setMessages(prev => [...prev, { role: 'user', content: prompt }]);
     setLoading(true);
 
     try {
-      const result = await commands.execute('oceanum-ai:submit-prompt', { prompt });
+      const result = await commands.execute('oceanum-ai:submit-prompt', {
+        prompt
+      });
       const explanation = (result as string) ?? '';
-      setMessages(prev => [...prev, { role: 'assistant', content: explanation }]);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: explanation }
+      ]);
     } catch (err: any) {
       setError(err?.message ?? 'An error occurred');
     } finally {
@@ -475,6 +517,35 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSubmit();
+      return;
+    }
+
+    // History navigation with up/down arrows
+    if (e.key === 'ArrowUp' && history.length > 0) {
+      e.preventDefault();
+      if (historyIndex === -1) {
+        // Save current input before navigating
+        setTempInput(input);
+        setHistoryIndex(history.length - 1);
+        setInput(history[history.length - 1]);
+      } else if (historyIndex > 0) {
+        setHistoryIndex(historyIndex - 1);
+        setInput(history[historyIndex - 1]);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown' && historyIndex !== -1) {
+      e.preventDefault();
+      if (historyIndex < history.length - 1) {
+        setHistoryIndex(historyIndex + 1);
+        setInput(history[historyIndex + 1]);
+      } else {
+        // Return to current input
+        setHistoryIndex(-1);
+        setInput(tempInput);
+      }
+      return;
     }
   };
 
@@ -485,7 +556,7 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
       </div>
       <div className="oceanum-ai-chat-messages">
         {messages.length === 0 && (
-          <div className="oceanum-ai-chat-empty">
+          <div className="oceanum-text-empty">
             Ask Oceanum AI to query and visualise data from the Datamesh.
           </div>
         )}
@@ -497,7 +568,11 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
             <span className="oceanum-ai-chat-role">
               {msg.role === 'user' ? 'You' : 'AI'}
             </span>
-            <pre className="oceanum-ai-chat-content">{msg.content}</pre>
+            {msg.role === 'user' ? (
+              <pre className="oceanum-ai-chat-content">{msg.content}</pre>
+            ) : (
+              <MarkdownContent content={msg.content} />
+            )}
           </div>
         ))}
         {loading && (
@@ -506,9 +581,7 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
             <span className="oceanum-ai-chat-loading">Thinking…</span>
           </div>
         )}
-        {error && (
-          <div className="oceanum-ai-chat-error">{error}</div>
-        )}
+        {error && <div className="oceanum-ai-chat-error">{error}</div>}
         <div ref={messagesEndRef} />
       </div>
       <div className="oceanum-ai-chat-input-area">
@@ -590,7 +663,7 @@ export class DatameshConnectWidget extends ReactWidget {
             shell={this.props.app.shell}
           />
         ) : (
-          <div className="datasource-item-details">
+          <div className="oceanum-text-empty">
             <a onClick={this.props.openDatameshUI}>Open</a> the Oceanum datamesh
             UI to add datasources. You will need to allow popups on this page if
             you are not already logged in to Oceanum.io.
@@ -603,23 +676,25 @@ export class DatameshConnectWidget extends ReactWidget {
   render(): React.ReactElement {
     return (
       <div className="datamesh-connect">
-        <header className="datamesh-connect-header">
+        <header className="oceanum-sidebar-header">
           <this.props.icon.react
             tag="span"
             width="auto"
-            height="24px"
+            height="20px"
             verticalAlign="middle"
-            marginRight="5px"
           />
-          <p>Datamesh workspace</p>
+          <span className="oceanum-sidebar-title">Oceanum.io</span>
+        </header>
+        <div className="datamesh-workspace-header">
+          <span>Datamesh Workspace</span>
           <div
             className="open-datamesh-ui"
             onClick={this.props.openDatameshUI}
             title="Open Datamesh UI"
           >
-            {<addIcon.react height="24px" verticalAlign="middle" />}
+            {<addIcon.react height="20px" verticalAlign="middle" />}
           </div>
-        </header>
+        </div>
         <div className="datamesh-connect-workspace">
           <UseSignal signal={this.renderSignal} initialArgs={null}>
             {(_, datameshWorkspace): React.ReactElement =>
