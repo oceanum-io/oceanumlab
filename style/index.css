@@ -186,6 +186,35 @@
   padding: 8px 4px;
 }
 
+.oceanum-text-empty a {
+  color: var(--jp-content-link-color);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.oceanum-text-empty a:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.oceanum-token-config {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+  padding: 12px 12px;
+  background: var(--jp-layout-color2);
+  border-top: 1px solid var(--jp-border-color2);
+}
+
+.oceanum-token-config a {
+  color: var(--jp-content-link-color);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.oceanum-token-config a:hover {
+  text-decoration: underline;
+}
+
 /* AI Chat panel */
 .oceanum-ai-chat {
   flex: 2 1 auto;
@@ -285,6 +314,7 @@
 .oceanum-ai-chat-disabled a {
   color: var(--jp-content-link-color);
   text-decoration: none;
+  cursor: pointer;
 }
 
 .oceanum-ai-chat-disabled a:hover {

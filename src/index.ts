@@ -14,7 +14,7 @@ import { INotebookTracker } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
-import { ChatRouter, ChatRouterError } from './chatRouter';
+import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { KernelHandoff } from './kernelHandoff';
 
 import '../style/index.css';
@@ -159,11 +159,12 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
           label: 'Submit prompt to Oceanum AI',
           execute: async (args: Record<string, unknown>) => {
             const prompt = args['prompt'] as string | undefined;
+            const chatHistory = (args['chatHistory'] as ChatMessage[]) ?? [];
             if (!prompt) {
               return;
             }
             try {
-              const result = await router.route(prompt);
+              const result = await router.route(prompt, chatHistory);
               const explanation = await handoff.inject(result.response, {
                 replaceCodeCell: result.hasCodeCellSelected
               });

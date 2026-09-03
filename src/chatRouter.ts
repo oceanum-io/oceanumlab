@@ -8,6 +8,11 @@ export type OceanumResponse =
   | { type: 'code'; message: string; code: string }
   | { type: 'markdown'; content: string; message?: string };
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface RouteResult {
   response: OceanumResponse;
   hasCodeCellSelected: boolean;
@@ -29,7 +34,10 @@ export class ChatRouter {
     private _notebookTracker: INotebookTracker
   ) {}
 
-  async route(prompt: string): Promise<RouteResult> {
+  async route(
+    prompt: string,
+    chatHistory: ChatMessage[] = []
+  ): Promise<RouteResult> {
     const token = this._settings.get('datameshToken').composite as string;
 
     if (!token) {
@@ -41,12 +49,27 @@ export class ChatRouter {
     // Get active cell source as context (best-effort)
     let context = '';
     let isCodeCell = false;
+    const notebookCells: string[] = [];
+
     try {
       const notebook = this._notebookTracker.currentWidget?.content;
-      if (notebook?.activeCell) {
-        const activeCell = notebook.activeCell;
-        context = activeCell.model.sharedModel.getSource();
-        isCodeCell = activeCell instanceof CodeCell;
+      if (notebook) {
+        // Collect all code cells (without outputs)
+        for (const cell of notebook.widgets) {
+          if (cell instanceof CodeCell) {
+            const source = cell.model.sharedModel.getSource();
+            if (source.trim()) {
+              notebookCells.push(source);
+            }
+          }
+        }
+
+        // Get active cell info
+        if (notebook.activeCell) {
+          const activeCell = notebook.activeCell;
+          context = activeCell.model.sharedModel.getSource();
+          isCodeCell = activeCell instanceof CodeCell;
+        }
       }
     } catch {
       // context is optional — never throw
@@ -54,15 +77,31 @@ export class ChatRouter {
 
     const url = `${OCEANUM_AI_BACKEND_URL}/api/chat`;
 
-    // Send code context with explicit label for the AI
-    const payload: { prompt: string; context?: string; codeContext?: string } =
-      { prompt };
+    // Build payload with all context
+    const payload: {
+      prompt: string;
+      context?: string;
+      codeContext?: string;
+      chatHistory?: ChatMessage[];
+      notebookCells?: string[];
+    } = { prompt };
+
     if (context) {
       if (isCodeCell) {
         payload.codeContext = context;
       } else {
         payload.context = context;
       }
+    }
+
+    // Include chat history (excluding the current prompt which is already in 'prompt')
+    if (chatHistory.length > 0) {
+      payload.chatHistory = chatHistory;
+    }
+
+    // Include all notebook code cells
+    if (notebookCells.length > 0) {
+      payload.notebookCells = notebookCells;
     }
 
     let response: Response;

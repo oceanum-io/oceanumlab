@@ -12,7 +12,7 @@ import { Notebook, NotebookPanel } from '@jupyterlab/notebook';
 import { CodeCellModel } from '@jupyterlab/cells';
 import { LabIcon, addIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
-import { MimeData } from '@lumino/coreutils';
+import { MimeData, ReadonlyJSONArray } from '@lumino/coreutils';
 import { Drag } from '@lumino/dragdrop';
 import { Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
@@ -21,6 +21,7 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
+import { OCEANUM_AI_BACKEND_URL } from './constants';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -457,6 +458,49 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 }
 
+/**
+ * Shows a message prompting user to configure their Datamesh token.
+ * Only renders when no token is set.
+ */
+function TokenConfigMessage({
+  commands
+}: {
+  commands: CommandRegistry;
+}): React.ReactElement | null {
+  const [hasToken, setHasToken] = React.useState(!!window.datameshToken);
+
+  React.useEffect(() => {
+    const checkToken = () => setHasToken(!!window.datameshToken);
+    const interval = setInterval(checkToken, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (hasToken) {
+    return null;
+  }
+
+  return (
+    <div className="oceanum-token-config">
+      Set your{' '}
+      <a
+        onClick={() =>
+          commands.execute('settingeditor:open', { query: 'Oceanum' })
+        }
+      >
+        Datamesh token
+      </a>{' '}
+      to enable Oceanum.oi services{' '}
+      <a
+        href="https://home.oceanum.io/account"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Get token here
+      </a>
+    </div>
+  );
+}
+
 interface IChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -466,7 +510,9 @@ interface IAIChatPanelProps {
   commands: CommandRegistry;
 }
 
-function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
+function AIChatPanel({
+  commands
+}: IAIChatPanelProps): React.ReactElement | null {
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [input, setInput] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -478,15 +524,55 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
   const [historyIndex, setHistoryIndex] = React.useState(-1);
   const [tempInput, setTempInput] = React.useState('');
 
-  // Check if Datamesh token is configured
-  const [hasToken, setHasToken] = React.useState(!!window.datameshToken);
+  // Track the actual token value to detect changes
+  const [token, setToken] = React.useState(window.datameshToken || '');
+  const hasToken = !!token;
+
+  // Check if code capability is enabled (null = loading/unknown)
+  const [codeEnabled, setCodeEnabled] = React.useState<boolean | null>(null);
 
   // Re-check token periodically (settings may change)
   React.useEffect(() => {
-    const checkToken = () => setHasToken(!!window.datameshToken);
+    const checkToken = () => {
+      const currentToken = window.datameshToken || '';
+      if (currentToken !== token) {
+        setToken(currentToken);
+      }
+    };
     const interval = setInterval(checkToken, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token]);
+
+  // Fetch capabilities when token changes
+  React.useEffect(() => {
+    if (!token) {
+      setCodeEnabled(null);
+      return;
+    }
+
+    const fetchCapabilities = async () => {
+      try {
+        const response = await fetch(
+          `${OCEANUM_AI_BACKEND_URL}/api/capabilities`,
+          {
+            headers: {
+              'X-Datamesh-Token': token
+            }
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setCodeEnabled(data.code === true);
+        } else {
+          setCodeEnabled(false);
+        }
+      } catch {
+        setCodeEnabled(false);
+      }
+    };
+
+    void fetchCapabilities();
+  }, [token]);
 
   // Auto-scroll to bottom when messages change
   React.useEffect(() => {
@@ -508,8 +594,11 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
     setLoading(true);
 
     try {
+      // Pass current chat history (before adding the new user message)
+      // The user message was already added to state, so we use the messages array directly
       const result = await commands.execute('oceanum-ai:submit-prompt', {
-        prompt
+        prompt,
+        chatHistory: messages as unknown as ReadonlyJSONArray
       });
       const explanation = (result as string) ?? '';
       setMessages(prev => [
@@ -559,44 +648,9 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
     }
   };
 
-  // Show disabled state if no token configured
-  if (!hasToken) {
-    return (
-      <div className="oceanum-ai-chat">
-        <div className="oceanum-ai-chat-header">
-          <span>Oceanum AI</span>
-        </div>
-        <div className="oceanum-ai-chat-messages">
-          <div className="oceanum-ai-chat-disabled">
-            <p>Oceanum AI requires a Datamesh token to function.</p>
-            <p>
-              Set your token in{' '}
-              <a
-                href="#"
-                onClick={e => {
-                  e.preventDefault();
-                  commands.execute('settingeditor:open', {
-                    query: 'Oceanum'
-                  });
-                }}
-              >
-                Settings → Oceanum.io
-              </a>
-            </p>
-            <p className="oceanum-ai-chat-disabled-hint">
-              Get your token at{' '}
-              <a
-                href="https://home.oceanum.io/account"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                home.oceanum.io/account
-              </a>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+  // Hide AI panel if no token or code capability is not enabled
+  if (!hasToken || codeEnabled === false) {
+    return null;
   }
 
   return (
@@ -607,7 +661,10 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
       <div className="oceanum-ai-chat-messages">
         {messages.length === 0 && (
           <div className="oceanum-text-empty">
-            Ask Oceanum AI to query and visualise data from the Datamesh.
+            Ask Oceanum AI to query and analyse data from Datamesh.
+            <br></br>
+            Generated code will be automatically inserted into your notebook in
+            the curretly selected cell.
           </div>
         )}
         {messages.map((msg, i) => (
@@ -714,9 +771,8 @@ export class DatameshConnectWidget extends ReactWidget {
           />
         ) : (
           <div className="oceanum-text-empty">
-            <a onClick={this.props.openDatameshUI}>Open</a> the Oceanum datamesh
-            UI to add datasources. You will need to allow popups on this page if
-            you are not already logged in to Oceanum.io.
+            <a onClick={this.props.openDatameshUI}>Open</a> the Oceanum Datamesh
+            UI to add datasources.
           </div>
         )}
       </>
@@ -751,6 +807,7 @@ export class DatameshConnectWidget extends ReactWidget {
               this.renderDisplay(datameshWorkspace)
             }
           </UseSignal>
+          <TokenConfigMessage commands={this.props.commands} />
         </div>
         <div className="datamesh-connect-divider" />
         <AIChatPanel commands={this.props.commands} />
