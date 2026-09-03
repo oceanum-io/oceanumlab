@@ -1,6 +1,7 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
+import { OCEANUM_AI_BACKEND_URL } from './constants';
 
 export type OceanumResponse =
   | { type: 'text'; message: string }
@@ -30,7 +31,6 @@ export class ChatRouter {
 
   async route(prompt: string): Promise<RouteResult> {
     const token = this._settings.get('datameshToken').composite as string;
-    const backendUrl = this._settings.get('backendUrl').composite as string;
 
     if (!token) {
       throw new ChatRouterError(
@@ -52,7 +52,7 @@ export class ChatRouter {
       // context is optional — never throw
     }
 
-    const url = `${backendUrl.replace(/\/$/, '')}/api/chat`;
+    const url = `${OCEANUM_AI_BACKEND_URL}/api/chat`;
 
     // Send code context with explicit label for the AI
     const payload: { prompt: string; context?: string; codeContext?: string } =
@@ -77,7 +77,7 @@ export class ChatRouter {
       });
     } catch {
       throw new ChatRouterError(
-        `Could not reach Oceanum AI backend at ${backendUrl}. Is it running?`
+        `Could not reach Oceanum AI backend at ${OCEANUM_AI_BACKEND_URL}. Is it running?`
       );
     }
 

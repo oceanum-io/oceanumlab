@@ -267,6 +267,35 @@
   border-radius: 4px;
 }
 
+.oceanum-ai-chat-disabled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.oceanum-ai-chat-disabled p {
+  margin: 0 0 8px 0;
+}
+
+.oceanum-ai-chat-disabled a {
+  color: var(--jp-content-link-color);
+  text-decoration: none;
+}
+
+.oceanum-ai-chat-disabled a:hover {
+  text-decoration: underline;
+}
+
+.oceanum-ai-chat-disabled-hint {
+  font-size: var(--jp-ui-font-size0);
+  margin-top: 8px;
+}
+
 .oceanum-ai-chat-input-area {
   flex: 0 0 auto;
   display: flex;

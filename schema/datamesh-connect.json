@@ -17,18 +17,6 @@
       "title": "Inject token",
       "description": "Inject Datamesh token into code.",
       "default": false
-    },
-    "backendUrl": {
-      "type": "string",
-      "title": "Oceanum AI backend URL",
-      "description": "URL of the Oceanum AI FastAPI backend.",
-      "default": "http://localhost:8000"
-    },
-    "autoRunCode": {
-      "type": "boolean",
-      "title": "Auto-run generated code",
-      "description": "Automatically execute the injected code cell after generation.",
-      "default": false
     }
   },
   "additionalProperties": false

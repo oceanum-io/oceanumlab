@@ -4,9 +4,9 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { CommandRegistry } from '@lumino/commands';
 import { OceanumResponse } from './chatRouter';
+import { AUTO_RUN_CODE } from './constants';
 
 export interface InjectOptions {
   /** If true, replace the selected code cell instead of inserting a new one */
@@ -16,7 +16,6 @@ export interface InjectOptions {
 export class KernelHandoff {
   constructor(
     private _notebookTracker: INotebookTracker,
-    private _settings: ISettingRegistry.ISettings,
     private _commands: CommandRegistry
   ) {}
 
@@ -101,8 +100,7 @@ export class KernelHandoff {
       }
 
       // Auto-run if enabled
-      const autoRun = this._settings.get('autoRunCode').composite as boolean;
-      if (autoRun) {
+      if (AUTO_RUN_CODE) {
         await NotebookActions.run(notebook, notebookPanel.sessionContext);
       }
 

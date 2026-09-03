@@ -478,6 +478,16 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
   const [historyIndex, setHistoryIndex] = React.useState(-1);
   const [tempInput, setTempInput] = React.useState('');
 
+  // Check if Datamesh token is configured
+  const [hasToken, setHasToken] = React.useState(!!window.datameshToken);
+
+  // Re-check token periodically (settings may change)
+  React.useEffect(() => {
+    const checkToken = () => setHasToken(!!window.datameshToken);
+    const interval = setInterval(checkToken, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Auto-scroll to bottom when messages change
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -548,6 +558,46 @@ function AIChatPanel({ commands }: IAIChatPanelProps): React.ReactElement {
       return;
     }
   };
+
+  // Show disabled state if no token configured
+  if (!hasToken) {
+    return (
+      <div className="oceanum-ai-chat">
+        <div className="oceanum-ai-chat-header">
+          <span>Oceanum AI</span>
+        </div>
+        <div className="oceanum-ai-chat-messages">
+          <div className="oceanum-ai-chat-disabled">
+            <p>Oceanum AI requires a Datamesh token to function.</p>
+            <p>
+              Set your token in{' '}
+              <a
+                href="#"
+                onClick={e => {
+                  e.preventDefault();
+                  commands.execute('settingeditor:open', {
+                    query: 'Oceanum'
+                  });
+                }}
+              >
+                Settings → Oceanum.io
+              </a>
+            </p>
+            <p className="oceanum-ai-chat-disabled-hint">
+              Get your token at{' '}
+              <a
+                href="https://home.oceanum.io/account"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                home.oceanum.io/account
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="oceanum-ai-chat">

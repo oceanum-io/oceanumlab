@@ -4,7 +4,7 @@ import {
   ILayoutRestorer,
   ILabStatus
 } from '@jupyterlab/application';
-import { ICommandPalette, IThemeManager, Notification } from '@jupyterlab/apputils';
+import { ICommandPalette, Notification } from '@jupyterlab/apputils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
@@ -19,21 +19,9 @@ import { KernelHandoff } from './kernelHandoff';
 
 import '../style/index.css';
 
-import oceanumLightSvg from '../style/icons/oceanum-light.svg';
-import oceanumDarkSvg from '../style/icons/oceanum-dark.svg';
 import oceanumSvg from '../style/icons/oceanum.svg';
 
-const oceanumIconLight = new LabIcon({
-  name: 'oceanum:icon-light',
-  svgstr: oceanumLightSvg
-});
-
-const oceanumIconDark = new LabIcon({
-  name: 'oceanum:icon-dark',
-  svgstr: oceanumDarkSvg
-});
-
-// Theme-adaptive icon using currentColor (registered for settings panel)
+// Theme-adaptive icon using currentColor (auto-adapts to light/dark themes)
 export const oceanumIcon = new LabIcon({
   name: 'oceanum:icon',
   svgstr: oceanumSvg
@@ -54,33 +42,14 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     ISettingRegistry,
     IStateDB
   ],
-  optional: [IThemeManager],
   activate: (
     app: JupyterFrontEnd,
     palette: ICommandPalette,
     restorer: ILayoutRestorer,
     status: ILabStatus,
-    settingRegistry: ISettingRegistry,
-    themeManager: IThemeManager | null
+    settingRegistry: ISettingRegistry
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
-
-    // Theme-aware icon helper
-    // Light theme needs dark icon (visible on light background)
-    // Dark theme needs light icon (visible on dark background)
-    const isLightTheme = (): boolean => {
-      const theme = themeManager?.theme ?? '';
-      // Check for light theme (JupyterLab Light, etc.)
-      // If theme is empty or contains 'Light', assume light theme
-      // Dark themes typically contain 'Dark' in the name
-      return !theme.toLowerCase().includes('dark');
-    };
-
-    const getOceanumIcon = () => {
-      return isLightTheme() ? oceanumIconDark : oceanumIconLight;
-    };
-
-    let oceanumIcon = getOceanumIcon();
 
     //Try to get the datamesh token from the settings
     const updateSettings = (set: ISettingRegistry.ISettings) => {
@@ -154,21 +123,6 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     // sessions widget in the sidebar.
     app.shell.add(datameshConnectWidget, 'left', { rank: 900 });
 
-    // Update icons when theme changes
-    if (themeManager) {
-      // Update icon when theme changes
-      themeManager.themeChanged.connect(() => {
-        oceanumIcon = getOceanumIcon();
-        datameshConnectWidget.title.icon = oceanumIcon;
-      });
-
-      // Also update icon once app is restored (theme may not be ready at init)
-      app.restored.then(() => {
-        oceanumIcon = getOceanumIcon();
-        datameshConnectWidget.title.icon = oceanumIcon;
-      });
-    }
-
     app.commands.addCommand('datamesh-ui:open', {
       execute: (args: any) => {
         openDatameshUI(args);
@@ -199,7 +153,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
       .load(SETTINGS_ID)
       .then(settings => {
         const router = new ChatRouter(settings, notebookTracker);
-        const handoff = new KernelHandoff(notebookTracker, settings, app.commands);
+        const handoff = new KernelHandoff(notebookTracker, app.commands);
 
         app.commands.addCommand('oceanum-ai:submit-prompt', {
           label: 'Submit prompt to Oceanum AI',
