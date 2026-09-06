@@ -3,10 +3,27 @@ import { INotebookTracker } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
 
-export type OceanumResponse =
-  | { type: 'text'; message: string }
-  | { type: 'code'; message: string; code: string }
-  | { type: 'markdown'; content: string; message?: string };
+/** One thing the backend asks us to place in the notebook. */
+export interface Block {
+  type: 'code' | 'markdown';
+  content: string;
+}
+
+/**
+ * What `/api/chat` answers with: one message, plus anything to place.
+ *
+ * This replaced a discriminated union of text/code/markdown responses
+ * (OCE-173). The union was exclusive, so the backend could not send a markdown
+ * table AND the query that produced it — it had to drop one. `message` is what
+ * goes in the chat window; `blocks` is what goes in the notebook, in order.
+ *
+ * `message` is always present now. On the old markdown variant it was optional,
+ * which is why the handoff used to fall back to 'Added markdown to notebook.'
+ */
+export interface OceanumResponse {
+  message: string;
+  blocks: Block[];
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -26,6 +43,32 @@ export class ChatRouterError extends Error {
     super(message);
     this.name = 'ChatRouterError';
   }
+}
+
+/**
+ * Check the body is the shape we expect before anything reads it.
+ *
+ * A bare `as OceanumResponse` cast used to be enough because the shape had not
+ * changed since the extension was written. It has now (OCE-173), and an
+ * extension pinned to one contract will meet a backend serving the other during
+ * any deploy where the two are not released together: the old body has no
+ * `blocks`, so `response.blocks.length` throws deep inside the handoff and the
+ * user sees nothing happen. One check turns that into the error the chat window
+ * already knows how to show.
+ */
+function asOceanumResponse(data: unknown): OceanumResponse {
+  const body = data as Partial<OceanumResponse> | null;
+  if (
+    !body ||
+    typeof body.message !== 'string' ||
+    !Array.isArray(body.blocks)
+  ) {
+    throw new ChatRouterError(
+      'Unexpected response from the AI backend. It may be running an ' +
+        'incompatible version of the chat API.'
+    );
+  }
+  return { message: body.message, blocks: body.blocks };
 }
 
 export class ChatRouter {
@@ -137,7 +180,7 @@ export class ChatRouter {
 
     const data = await response.json();
     return {
-      response: data as OceanumResponse,
+      response: asOceanumResponse(data),
       hasCodeCellSelected: isCodeCell && context.trim().length > 0
     };
   }
