@@ -22,15 +22,34 @@
   color: var(--jp-content-link-color);
 }
 
-.datamesh-connect-header {
-  font-weight: bold;
-  padding: 8px 10px;
+/* Top-level Oceanum.io header */
+.oceanum-sidebar-header {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--jp-layout-color2);
+  border-bottom: 1px solid var(--jp-border-color1);
 }
 
-.datamesh-connect-header p {
-  font-weight: bold;
+.oceanum-sidebar-title {
+  font-weight: 600;
+  font-size: var(--jp-ui-font-size1);
+  letter-spacing: 0.5px;
+  color: var(--jp-ui-font-color1);
+}
+
+/* Datamesh Workspace section header */
+.datamesh-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color2);
+  background: var(--jp-layout-color1);
+  letter-spacing: 0.5px;
 }
 
 .add-connection {
@@ -139,4 +158,299 @@
 .expanded {
   background-color: var(--jp-layout-color2);
   padding: 2px;
+}
+
+/* Layout: make the sidebar panel a flex column */
+.datamesh-connect {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.datamesh-connect-workspace {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 80px;
+}
+
+.datamesh-connect-divider {
+  flex: 0 0 1px;
+  background: var(--jp-border-color2);
+  margin: 0;
+}
+.oceanum-text-empty {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+  font-style: italic;
+  padding: 8px 4px;
+}
+
+.oceanum-text-empty a {
+  color: var(--jp-content-link-color);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.oceanum-text-empty a:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.oceanum-token-config {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+  padding: 12px 12px;
+  background: var(--jp-layout-color2);
+  border-top: 1px solid var(--jp-border-color2);
+}
+
+.oceanum-token-config a {
+  color: var(--jp-content-link-color);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.oceanum-token-config a:hover {
+  text-decoration: underline;
+}
+
+/* AI Chat panel */
+.oceanum-ai-chat {
+  flex: 2 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.oceanum-ai-chat-header {
+  flex: 0 0 auto;
+  font-weight: bold;
+  font-size: var(--jp-ui-font-size1);
+  padding: 6px 10px;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+  letter-spacing: 0.5px;
+}
+
+.oceanum-ai-chat-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+
+
+.oceanum-ai-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oceanum-ai-chat-role {
+  font-size: var(--jp-ui-font-size0);
+  font-weight: 600;
+  color: var(--jp-ui-font-color2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.oceanum-ai-chat-message--user .oceanum-ai-chat-role {
+  color: var(--jp-brand-color1);
+}
+
+.oceanum-ai-chat-content {
+  margin: 0;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--jp-layout-color2);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border-left: 2px solid var(--jp-border-color2);
+}
+
+.oceanum-ai-chat-message--user .oceanum-ai-chat-content {
+  background: var(--jp-layout-color3);
+  border-left-color: var(--jp-brand-color1);
+}
+
+.oceanum-ai-chat-loading {
+  color: var(--jp-ui-font-color2);
+  font-style: italic;
+  font-size: var(--jp-ui-font-size1);
+  padding: 4px 8px;
+}
+
+.oceanum-ai-chat-error {
+  color: var(--jp-error-color1);
+  font-size: var(--jp-ui-font-size0);
+  padding: 4px 8px;
+  background: var(--jp-error-color3, rgba(244,67,54,0.1));
+  border-radius: 4px;
+}
+
+.oceanum-ai-chat-disabled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size1);
+}
+
+.oceanum-ai-chat-disabled p {
+  margin: 0 0 8px 0;
+}
+
+.oceanum-ai-chat-disabled a {
+  color: var(--jp-content-link-color);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.oceanum-ai-chat-disabled a:hover {
+  text-decoration: underline;
+}
+
+.oceanum-ai-chat-disabled-hint {
+  font-size: var(--jp-ui-font-size0);
+  margin-top: 8px;
+}
+
+.oceanum-ai-chat-input-area {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--jp-border-color2);
+  background: var(--jp-layout-color1);
+}
+
+.oceanum-ai-chat-input {
+  width: 100%;
+  resize: none;
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 4px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.oceanum-ai-chat-input:focus {
+  border-color: var(--jp-brand-color1);
+}
+
+.oceanum-ai-chat-input:disabled {
+  opacity: 0.6;
+}
+
+.oceanum-ai-chat-send {
+  align-self: flex-end;
+  padding: 4px 16px;
+  font-size: var(--jp-ui-font-size1);
+  cursor: pointer;
+}
+
+.oceanum-ai-chat-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Markdown rendering in AI chat messages */
+.oceanum-ai-markdown {
+  white-space: normal;
+}
+
+.oceanum-ai-markdown p {
+  margin: 0 0 0.5em 0;
+}
+
+.oceanum-ai-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.oceanum-ai-markdown h1,
+.oceanum-ai-markdown h2,
+.oceanum-ai-markdown h3,
+.oceanum-ai-markdown h4 {
+  margin: 0.5em 0 0.25em 0;
+  font-weight: 600;
+}
+
+.oceanum-ai-markdown h1 {
+  font-size: 1.3em;
+}
+
+.oceanum-ai-markdown h2 {
+  font-size: 1.2em;
+}
+
+.oceanum-ai-markdown h3 {
+  font-size: 1.1em;
+}
+
+.oceanum-ai-markdown ul,
+.oceanum-ai-markdown ol {
+  margin: 0.25em 0;
+  padding-left: 1.5em;
+}
+
+.oceanum-ai-markdown li {
+  margin: 0.15em 0;
+}
+
+.oceanum-ai-markdown code {
+  font-family: var(--jp-code-font-family);
+  font-size: 0.9em;
+  background: var(--jp-layout-color3);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+.oceanum-ai-markdown pre {
+  margin: 0.5em 0;
+  padding: 0.5em;
+  background: var(--jp-layout-color3);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.oceanum-ai-markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.oceanum-ai-markdown a {
+  color: var(--jp-content-link-color);
+}
+
+.oceanum-ai-markdown blockquote {
+  margin: 0.5em 0;
+  padding: 0.25em 0.75em;
+  border-left: 3px solid var(--jp-border-color1);
+  color: var(--jp-ui-font-color2);
+}
+
+.oceanum-ai-markdown strong {
+  font-weight: 600;
+}
+
+.oceanum-ai-markdown hr {
+  border: none;
+  border-top: 1px solid var(--jp-border-color2);
+  margin: 0.5em 0;
 }

@@ -4,38 +4,36 @@ import {
   ILayoutRestorer,
   ILabStatus
 } from '@jupyterlab/application';
-import { ICommandPalette, IThemeManager } from '@jupyterlab/apputils';
-import { URLExt } from '@jupyterlab/coreutils';
+import { ICommandPalette, Notification } from '@jupyterlab/apputils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
-import { ServerConnection } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
+import { INotebookTracker } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
+import { requestAPI } from './handler';
+import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { KernelHandoff } from './kernelHandoff';
 
 import '../style/index.css';
 
 import oceanumSvg from '../style/icons/oceanum.svg';
 
-declare global {
-  interface Window {
-    datameshToken: string;
-    injectToken: boolean;
-  }
-}
-
-const oceanumIcon = new LabIcon({
-  name: 'oceanum:main',
+// Theme-adaptive icon using currentColor (auto-adapts to light/dark themes)
+export const oceanumIcon = new LabIcon({
+  name: 'oceanum:icon',
   svgstr: oceanumSvg
 });
+
+const PLUGIN_ID = '@oceanum/oceanumlab:datamesh-connect';
 
 /**
  * Initialization data for the extension.
  */
 export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
-  id: 'datamesh-connect',
+  id: PLUGIN_ID,
   autoStart: true,
   requires: [
     ICommandPalette,
@@ -44,27 +42,22 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     ISettingRegistry,
     IStateDB
   ],
-  optional: [IThemeManager],
   activate: (
     app: JupyterFrontEnd,
     palette: ICommandPalette,
     restorer: ILayoutRestorer,
     status: ILabStatus,
-    settingRegistry: ISettingRegistry,
-    themeManager: IThemeManager | null
+    settingRegistry: ISettingRegistry
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
     //Try to get the datamesh token from the settings
-    const serversettings = ServerConnection.makeSettings();
-    const requestUrl = URLExt.join(serversettings.baseUrl, 'oceanum', 'env');
     const updateSettings = (set: ISettingRegistry.ISettings) => {
       const token = set.get('datameshToken');
       if (token && token.user) {
         window.datameshToken = token.user as string;
-        fetch(requestUrl + '/', {
+        requestAPI('env/', {
           method: 'POST',
-          headers: { authorization: `Token ${serversettings.token}` },
           body: JSON.stringify({ DATAMESH_TOKEN: token.user })
         }).then(res => console.log(res));
       }
@@ -72,13 +65,22 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     };
     //Try to get the datamesh token from the envars
 
-    settingRegistry.load('@oceanum/oceanumlab:plugin').then(set => {
-      set.changed.connect(updateSettings, this);
-      updateSettings(set);
-    });
+    Promise.all([app.restored, settingRegistry.load(PLUGIN_ID)])
+      .then(([, setting]) => {
+        // Read the settings
+        updateSettings(setting);
+
+        // Listen for your plugin setting changes using Signal
+        setting.changed.connect(updateSettings);
+      })
+      .catch(reason => {
+        console.error(
+          `Something went wrong when reading the Oceanumlab settings.\n${reason}`
+        );
+      });
 
     const getCurrentWidget = (): Widget => {
-      return app.shell.currentWidget;
+      return app.shell!.currentWidget!;
     };
 
     const openDatameshUI = (event: any): void => {
@@ -108,6 +110,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       name: 'Datamesh Connect',
       icon: oceanumIcon,
       openDatameshUI: openDatameshUI,
+      commands: app.commands,
       getCurrentWidget
     });
     datameshConnectWidget.id = 'datamesh-connect';
@@ -128,4 +131,60 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default datamesh_connect_extension;
+/**
+ * Second plugin: Oceanum AI chat integration.
+ * Wires ChatRouter → KernelHandoff and exposes the
+ * `oceanum-ai:submit-prompt` command.
+ */
+export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
+  id: '@oceanum/oceanumlab:ai-chat',
+  autoStart: true,
+  requires: [INotebookTracker, ISettingRegistry],
+  activate: (
+    app: JupyterFrontEnd,
+    notebookTracker: INotebookTracker,
+    settingRegistry: ISettingRegistry
+  ) => {
+    console.log('Oceanum AI chat extension is loaded');
+
+    const SETTINGS_ID = '@oceanum/oceanumlab:datamesh-connect';
+
+    settingRegistry
+      .load(SETTINGS_ID)
+      .then(settings => {
+        const router = new ChatRouter(settings, notebookTracker);
+        const handoff = new KernelHandoff(notebookTracker, app.commands);
+
+        app.commands.addCommand('oceanum-ai:submit-prompt', {
+          label: 'Submit prompt to Oceanum AI',
+          execute: async (args: Record<string, unknown>) => {
+            const prompt = args['prompt'] as string | undefined;
+            const chatHistory = (args['chatHistory'] as ChatMessage[]) ?? [];
+            if (!prompt) {
+              return;
+            }
+            try {
+              const result = await router.route(prompt, chatHistory);
+              const explanation = await handoff.inject(result.response, {
+                replaceCodeCell: result.hasCodeCellSelected
+              });
+              return explanation;
+            } catch (err) {
+              if (err instanceof ChatRouterError) {
+                Notification.error(err.message, { autoClose: 5000 });
+              } else {
+                console.error('Oceanum AI: unexpected error', err);
+              }
+            }
+          }
+        });
+      })
+      .catch(reason => {
+        console.error(
+          `Oceanum AI: could not load settings from ${SETTINGS_ID}.\n${reason}`
+        );
+      });
+  }
+};
+
+export default [datamesh_connect_extension, oceanum_ai_extension];

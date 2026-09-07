@@ -9,7 +9,7 @@ for the frontend extension.
 
 ## Requirements
 
-- JupyterLab >= 3.0
+- JupyterLab >= 4.0
 
 ## Install
 
@@ -27,22 +27,6 @@ To remove the extension, execute:
 pip uninstall oceanumlab
 ```
 
-## Troubleshoot
-
-If you are seeing the frontend extension, but it is not working, check
-that the server extension is enabled:
-
-```bash
-jupyter server extension list
-```
-
-If the server extension is installed and enabled, but you are not seeing
-the frontend extension, check the frontend extension is installed:
-
-```bash
-jupyter labextension list
-```
-
 ## Contributing
 
 ### Development install
@@ -57,11 +41,9 @@ The `jlpm` command is JupyterLab's pinned version of
 # Clone the repo to your local environment
 # Change directory to the oceanumlab directory
 # Install package in development mode
-pip install -e .
+pip install -e "."
 # Link your development version of the extension with JupyterLab
 jupyter labextension develop . --overwrite
-# Server extension must be manually installed in develop mode
-jupyter server extension enable oceanumlab
 # Rebuild extension Typescript source after making changes
 jlpm build
 ```
@@ -86,8 +68,6 @@ jupyter lab build --minimize=False
 ### Development uninstall
 
 ```bash
-# Server extension must be manually disabled in develop mode
-jupyter server extension disable oceanumlab
 pip uninstall oceanumlab
 ```
 
@@ -126,7 +106,7 @@ jlpm test
 
 #### Integration tests
 
-This extension uses [Playwright](https://playwright.dev/docs/intro/) for the integration tests (aka user level tests).
+This extension uses [Playwright](https://playwright.dev/docs/intro) for the integration tests (aka user level tests).
 More precisely, the JupyterLab helper [Galata](https://github.com/jupyterlab/jupyterlab/tree/master/galata) is used to handle testing the extension in JupyterLab.
 
 More information are provided within the [ui-tests](./ui-tests/README.md) README.

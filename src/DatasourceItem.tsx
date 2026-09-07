@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { caretDownIcon, caretRightIcon } from '@jupyterlab/ui-components';
-import { ArrowBendDownRight } from 'phosphor-react';
+import { ArrowBendDownRight } from '@phosphor-icons/react';
 
 import '../style/index.css';
 import { IDatasource } from './DatameshWidget';
@@ -24,13 +24,19 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
   onMouseDown
 }) => {
   const [expanded, setExpandedValue] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleToggleExpand = (): void => {
     setExpandedValue(!expanded);
   };
 
+  const startDrag=(e:React.MouseEvent<HTMLSpanElement, MouseEvent>)=>{
+    setIsDragging(true);
+    onMouseDown(e, datasource)
+  }
+
   return (
-    <div className={expanded && 'expanded'}>
+    <div className={expanded ? 'expanded' : ''}>
       <div key={datasource.id} className="datasource-item-title">
         <button
           title={expanded ? 'Hide Details' : 'Show Details'}
@@ -54,12 +60,13 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
         <span
           title={datasource.description}
           className={
-            onMouseDown
+            isDragging
               ? 'datasource-item-name'
               : 'datasource-item-name draggable'
           }
           onClick={handleToggleExpand}
-          onMouseDown={e => onMouseDown(e, datasource)}
+          onMouseDown={startDrag}
+          onMouseUp={() => setIsDragging(false)}
         >
           {datasource.description}
         </span>

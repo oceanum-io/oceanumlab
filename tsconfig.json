@@ -18,8 +18,8 @@
     "strict": true,
     "strictNullChecks": false,
     "target": "ES2018",
-    "types": ["jest"],
-    "baseUrl": "."
+    "strictPropertyInitialization": false,
+    "skipLibCheck": true
   },
   "include": ["src/*"]
 }
