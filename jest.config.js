@@ -24,5 +24,10 @@ module.exports = {
   ],
   coverageReporters: ['lcov', 'text'],
   testRegex: 'src/.*/.*.spec.ts[x]?$',
+  // The built labextension contains a COPY of package.json, so jest sees two
+  // modules both named @oceanum/oceanumlab and warns about a haste collision on
+  // every run. It is gitignored build output, not source, and nothing here
+  // should be resolved out of it.
+  modulePathIgnorePatterns: ['<rootDir>/oceanumlab/labextension/'],
   transformIgnorePatterns: [`/node_modules/(?!${esModules}).+`]
 };
