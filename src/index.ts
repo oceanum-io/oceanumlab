@@ -16,6 +16,8 @@ import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { KernelHandoff } from './kernelHandoff';
+import { runChatLoop, STOPPED } from './aiLoop';
+import { MAX_OBSERVE_ROUNDS } from './constants';
 
 import '../style/index.css';
 
@@ -155,6 +157,17 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         const router = new ChatRouter(settings, notebookTracker);
         const handoff = new KernelHandoff(notebookTracker, app.commands);
 
+        // The run in flight, if any. Command args must be JSON, so a signal
+        // cannot be passed in; Stop is a second command that reaches it here.
+        let current: AbortController | null = null;
+
+        app.commands.addCommand('oceanum-ai:stop', {
+          label: 'Stop the current Oceanum AI response',
+          execute: () => {
+            current?.abort();
+          }
+        });
+
         app.commands.addCommand('oceanum-ai:submit-prompt', {
           label: 'Submit prompt to Oceanum AI',
           execute: async (args: Record<string, unknown>) => {
@@ -163,17 +176,46 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             if (!prompt) {
               return;
             }
+            // Read per prompt, not once at load, so a settings change applies
+            // to the next question without a reload.
+            const autoRunCode = settings.get('autoRunCode')
+              .composite as boolean;
+            const iterate = settings.get('iterate').composite as boolean;
+
+            current?.abort();
+            const controller = new AbortController();
+            current = controller;
             try {
-              const result = await router.route(prompt, chatHistory);
-              const explanation = await handoff.inject(result.response, {
-                replaceCodeCell: result.hasCodeCellSelected
-              });
-              return explanation;
+              return await runChatLoop(
+                prompt,
+                chatHistory,
+                {
+                  route: (p, h, signal) => router.route(p, h, signal),
+                  observe: (p, h, runs, signal) =>
+                    router.observe(p, h, runs, signal),
+                  place: (response, opts) => handoff.inject(response, opts)
+                },
+                {
+                  autoRunCode,
+                  iterate,
+                  maxRounds: MAX_OBSERVE_ROUNDS,
+                  signal: controller.signal
+                }
+              );
             } catch (err) {
+              // Anything that failed because the user pressed Stop is not an
+              // error to them: the aborted fetch, or its body read.
+              if (controller.signal.aborted) {
+                return STOPPED;
+              }
               if (err instanceof ChatRouterError) {
                 Notification.error(err.message, { autoClose: 5000 });
               } else {
                 console.error('Oceanum AI: unexpected error', err);
+              }
+            } finally {
+              if (current === controller) {
+                current = null;
               }
             }
           }

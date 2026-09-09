@@ -1,6 +1,6 @@
 {
     "name": "@oceanum/oceanumlab",
-    "version": "4.1.0",
+    "version": "4.2.0",
     "description": "A Jupyterlab extension to interact with the Oceanum.io platform",
     "keywords": [
         "jupyter",
@@ -115,25 +115,6 @@
         "**/__tests__",
         "ui-tests"
     ],
-    "eslintConfig": {
-        "extends": [
-            "eslint:recommended",
-            "plugin:@typescript-eslint/eslint-recommended",
-            "plugin:@typescript-eslint/recommended",
-            "plugin:prettier/recommended"
-        ],
-        "parser": "@typescript-eslint/parser",
-        "parserOptions": {
-            "project": "tsconfig.json",
-            "sourceType": "module"
-        },
-        "plugins": [
-            "@typescript-eslint"
-        ],
-        "base": {
-            "name": "oceanumlab"
-        }
-    },
     "prettier": {
         "singleQuote": true,
         "trailingComma": "none",
