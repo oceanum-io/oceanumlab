@@ -23,6 +23,9 @@ export interface InjectOptions {
   signal?: AbortSignal;
 }
 
+/** Longest wait for a starting kernel before the cell is reported as not run. */
+const KERNEL_START_WAIT_MS = 10000;
+
 export class KernelHandoff {
   constructor(
     private _notebookTracker: INotebookTracker,
@@ -169,12 +172,20 @@ export class KernelHandoff {
    *
    * `runCells` resolves false for a kernel error (the traceback is in the
    * outputs) and for some of the ways a cell can fail to execute at all
-   * (pending input, kernel still initialising, interrupted); it resolves TRUE
-   * with nothing run when there is no kernel or the kernel is terminating.
-   * None of the did-not-run paths touch the outputs, so a replaced cell would
-   * still show its previous run; they are cleared first so that whatever is
-   * there afterwards came from this run, and an empty result on a did-not-run
-   * path is reported as an error rather than as a clean, silent run.
+   * (pending input, interrupted); it resolves TRUE with nothing run when there
+   * is no kernel, when the kernel is terminating, or when the kernel is still
+   * starting (`CodeCell.execute` bails silently on a session without a
+   * kernel); and it rejects when the kernel is dead. None of the did-not-run
+   * paths touch the outputs, so a replaced cell would still show its previous
+   * run; they are cleared first so that whatever is there afterwards came from
+   * this run. The execution count is cleared with them and only a kernel
+   * reply sets it again, so a null count afterwards means nothing ran,
+   * whatever `runCells` resolved to; that is reported as an error rather than
+   * as a clean, silent run.
+   *
+   * Pending input is refused BEFORE clearing: clearing the outputs of a cell
+   * that is waiting on `input()` disposes the prompt widget, and the kernel
+   * then waits forever for an answer nobody can give.
    */
   private async _run(
     notebookPanel: NotebookPanel,
@@ -182,6 +193,23 @@ export class KernelHandoff {
     signal?: AbortSignal
   ): Promise<Pick<ObservedRun, 'status' | 'stdout' | 'error'>> {
     const { content: notebook, sessionContext } = notebookPanel;
+    if (sessionContext.kernelDisplayStatus === 'initializing') {
+      // A kernel is starting (for a notebook this call just created, say).
+      // Bounded: `ready` never resolves if the kernel ends up needing to be
+      // selected by hand.
+      await Promise.race([
+        sessionContext.ready,
+        new Promise<void>(resolve => setTimeout(resolve, KERNEL_START_WAIT_MS))
+      ]);
+      if (signal?.aborted) {
+        return didNotRun('stopped before the kernel was ready');
+      }
+    }
+    if (sessionContext.pendingInput) {
+      return didNotRun(
+        'the kernel is waiting for input that must be answered first'
+      );
+    }
     const interrupt = () => {
       void sessionContext.session?.kernel?.interrupt().catch(() => {
         // Already dead or gone; there is nothing left to interrupt.
@@ -192,8 +220,14 @@ export class KernelHandoff {
     }, false);
     signal?.addEventListener('abort', interrupt, { once: true });
     let ran: boolean;
+    let failure: string | null = null;
     try {
       ran = await NotebookActions.runCells(notebook, [cell], sessionContext);
+    } catch (err) {
+      // A dead kernel rejects rather than resolving false. Report it like any
+      // other did-not-run so the rounds already placed keep their messages.
+      ran = false;
+      failure = err instanceof Error ? err.message : String(err);
     } finally {
       signal?.removeEventListener('abort', interrupt);
     }
@@ -211,16 +245,23 @@ export class KernelHandoff {
     const outcome = harvestOutputs(outputs);
 
     if (
-      (!ran || sessionContext.hasNoKernel || sessionContext.isTerminating) &&
+      (!ran || cell.model.executionCount === null) &&
       outcome.status === 'ok'
     ) {
-      return {
-        status: 'error',
-        stdout: '',
-        error:
-          'The cell did not execute (no kernel available, or the execution was interrupted).'
-      };
+      return didNotRun(
+        failure ?? 'no kernel available yet, or the execution was interrupted'
+      );
     }
     return outcome;
   }
+}
+
+function didNotRun(
+  reason: string
+): Pick<ObservedRun, 'status' | 'stdout' | 'error'> {
+  return {
+    status: 'error',
+    stdout: '',
+    error: `The cell did not execute (${reason}).`
+  };
 }
