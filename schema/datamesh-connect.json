@@ -17,6 +17,18 @@
       "title": "Inject token",
       "description": "Inject Datamesh token into code.",
       "default": false
+    },
+    "autoRunCode": {
+      "type": "boolean",
+      "title": "Auto-run code",
+      "description": "Run code cells the AI inserts as soon as they are placed.",
+      "default": false
+    },
+    "iterate": {
+      "type": "boolean",
+      "title": "Iterate",
+      "description": "After running, send each cell's output back to the AI so it can fix an error or take the next step. Only takes effect with Auto-run code on.",
+      "default": false
     }
   },
   "additionalProperties": false

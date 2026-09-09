@@ -6,3 +6,7 @@ tests
 
 **/__tests__
 ui-tests
+
+# Built labextension output. It carries a COPY of package.json whose eslintConfig
+# eslint 9 rejects, so `eslint .` fails after any build. jest ignores it too.
+oceanumlab/labextension

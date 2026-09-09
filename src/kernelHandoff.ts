@@ -6,11 +6,14 @@ import {
 import { CodeCell } from '@jupyterlab/cells';
 import { CommandRegistry } from '@lumino/commands';
 import { OceanumResponse } from './chatRouter';
-import { AUTO_RUN_CODE } from './constants';
+import { harvestOutputs, ObservedRun } from './notebookRun';
+import type { PlacedResponse } from './aiLoop';
 
 export interface InjectOptions {
   /** If true, replace the selected code cell instead of inserting a new one */
   replaceCodeCell?: boolean;
+  /** Run each code cell as it is placed. A user setting, not a build constant. */
+  autoRun?: boolean;
 }
 
 export class KernelHandoff {
@@ -23,7 +26,7 @@ export class KernelHandoff {
    * Create a new Python 3 notebook if none exists.
    */
   private async _ensureNotebook(): Promise<NotebookPanel | null> {
-    let notebookPanel = this._notebookTracker.currentWidget;
+    const notebookPanel = this._notebookTracker.currentWidget;
     if (notebookPanel) {
       return notebookPanel;
     }
@@ -67,16 +70,20 @@ export class KernelHandoff {
   async inject(
     response: OceanumResponse,
     options: InjectOptions = {}
-  ): Promise<string> {
+  ): Promise<PlacedResponse> {
+    const runs: ObservedRun[] = [];
     if (response.blocks.length === 0) {
       // Nothing to place — just the message for the chat window.
-      return response.message;
+      return { message: response.message, runs };
     }
 
     // Ensure we have a notebook (create one if needed)
     const notebookPanel = await this._ensureNotebook();
     if (!notebookPanel) {
-      return response.message + '\n\n(Could not create notebook)';
+      return {
+        message: response.message + '\n\n(Could not create notebook)',
+        runs
+      };
     }
 
     const notebook = notebookPanel.content;
@@ -90,8 +97,10 @@ export class KernelHandoff {
 
     for (const block of response.blocks) {
       if (block.type === 'code') {
+        let cell: CodeCell | null = null;
         if (replaceTarget) {
           replaceTarget.model.sharedModel.setSource(block.content);
+          cell = replaceTarget;
           replaceTarget = null;
         } else {
           NotebookActions.insertBelow(notebook);
@@ -100,12 +109,17 @@ export class KernelHandoff {
             continue;
           }
           newCell.model.sharedModel.setSource(block.content);
+          cell = newCell instanceof CodeCell ? newCell : null;
         }
 
-        // Auto-run if enabled. Per block, as before: `run` executes the
-        // selected cell, and the block just written is the selected one.
-        if (AUTO_RUN_CODE) {
+        // Per block: `run` executes the selected cell, and the block just
+        // written is the selected one. Reading the outputs afterwards is what
+        // makes the iterate workflow possible -- it is the only place the
+        // kernel's answer can be seen.
+        if (options.autoRun && cell) {
           await NotebookActions.run(notebook, notebookPanel.sessionContext);
+          const outcome = harvestOutputs(cell.model.outputs.toJSON());
+          runs.push({ code: block.content, message: '', ...outcome });
         }
       } else {
         NotebookActions.insertBelow(notebook);
@@ -124,6 +138,6 @@ export class KernelHandoff {
       }
     }
 
-    return response.message;
+    return { message: response.message, runs };
   }
 }

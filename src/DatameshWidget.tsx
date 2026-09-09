@@ -581,7 +581,9 @@ function AIChatPanel({
 
   const handleSubmit = async (): Promise<void> => {
     const prompt = input.trim();
-    if (!prompt || loading) return;
+    if (!prompt || loading) {
+      return;
+    }
 
     // Add to history
     setHistory(prev => [...prev, prompt]);
@@ -701,13 +703,23 @@ function AIChatPanel({
           onKeyDown={handleKeyDown}
           disabled={loading}
         />
-        <button
-          className="jp-mod-styled oceanum-ai-chat-send"
-          onClick={() => void handleSubmit()}
-          disabled={loading || !input.trim()}
-        >
-          {loading ? '…' : 'Send'}
-        </button>
+        {loading ? (
+          <button
+            className="jp-mod-styled oceanum-ai-chat-send"
+            onClick={() => void commands.execute('oceanum-ai:stop')}
+            title="Stop the current response"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            className="jp-mod-styled oceanum-ai-chat-send"
+            onClick={() => void handleSubmit()}
+            disabled={!input.trim()}
+          >
+            Send
+          </button>
+        )}
       </div>
     </div>
   );

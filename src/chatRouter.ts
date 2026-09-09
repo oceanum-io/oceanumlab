@@ -2,6 +2,7 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
+import type { ObservedRun } from './notebookRun';
 
 /** One thing the backend asks us to place in the notebook. */
 export interface Block {
@@ -79,16 +80,41 @@ export class ChatRouter {
 
   async route(
     prompt: string,
-    chatHistory: ChatMessage[] = []
+    chatHistory: ChatMessage[] = [],
+    signal?: AbortSignal
   ): Promise<RouteResult> {
-    const token = this._settings.get('datameshToken').composite as string;
+    const { payload, isCodeCell, context } = this._gather(prompt, chatHistory);
+    const data = await this._send('/api/chat', payload, signal);
+    return {
+      response: asOceanumResponse(data),
+      hasCodeCellSelected: isCodeCell && context.trim().length > 0
+    };
+  }
 
-    if (!token) {
-      throw new ChatRouterError(
-        'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
-      );
-    }
+  /**
+   * The notebook half of the execute loop: the code ran in the user's own
+   * kernel, here is what happened, what next? Same context as `route`, plus
+   * every run so far, so the agent sees the whole chain it is continuing.
+   */
+  async observe(
+    prompt: string,
+    chatHistory: ChatMessage[],
+    runs: ObservedRun[],
+    signal?: AbortSignal
+  ): Promise<OceanumResponse> {
+    const { payload } = this._gather(prompt, chatHistory);
+    const data = await this._send(
+      '/api/chat/observe',
+      { ...payload, runs },
+      signal
+    );
+    return asOceanumResponse(data);
+  }
 
+  private _gather(
+    prompt: string,
+    chatHistory: ChatMessage[]
+  ): { payload: ChatPayload; isCodeCell: boolean; context: string } {
     // Get active cell source as context (best-effort)
     let context = '';
     let isCodeCell = false;
@@ -118,16 +144,8 @@ export class ChatRouter {
       // context is optional — never throw
     }
 
-    const url = `${OCEANUM_AI_BACKEND_URL}/api/chat`;
-
     // Build payload with all context
-    const payload: {
-      prompt: string;
-      context?: string;
-      codeContext?: string;
-      chatHistory?: ChatMessage[];
-      notebookCells?: string[];
-    } = { prompt };
+    const payload: ChatPayload = { prompt };
 
     if (context) {
       if (isCodeCell) {
@@ -147,17 +165,37 @@ export class ChatRouter {
       payload.notebookCells = notebookCells;
     }
 
+    return { payload, isCodeCell, context };
+  }
+
+  private async _send(
+    path: string,
+    payload: unknown,
+    signal?: AbortSignal
+  ): Promise<unknown> {
+    const token = this._settings.get('datameshToken').composite as string;
+    if (!token) {
+      throw new ChatRouterError(
+        'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
+      );
+    }
+
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await fetch(`${OCEANUM_AI_BACKEND_URL}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Datamesh-Token': token
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
-    } catch {
+    } catch (err) {
+      // The user pressed Stop. Not a failure, and not "could not reach".
+      if (signal?.aborted) {
+        throw new ChatStopped();
+      }
       throw new ChatRouterError(
         `Could not reach Oceanum AI backend at ${OCEANUM_AI_BACKEND_URL}. Is it running?`
       );
@@ -178,10 +216,22 @@ export class ChatRouter {
       throw new ChatRouterError(`Backend error: ${detail}`, response.status);
     }
 
-    const data = await response.json();
-    return {
-      response: asOceanumResponse(data),
-      hasCodeCellSelected: isCodeCell && context.trim().length > 0
-    };
+    return response.json();
+  }
+}
+
+interface ChatPayload {
+  prompt: string;
+  context?: string;
+  codeContext?: string;
+  chatHistory?: ChatMessage[];
+  notebookCells?: string[];
+}
+
+/** Thrown when a request was cancelled by Stop. Distinct so callers can stay quiet. */
+export class ChatStopped extends Error {
+  constructor() {
+    super('Stopped.');
+    this.name = 'ChatStopped';
   }
 }
