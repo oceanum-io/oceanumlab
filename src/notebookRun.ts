@@ -24,9 +24,12 @@ export interface ObservedRun {
 export const MAX_OBSERVED_CHARS = 8000;
 
 // CSI (colour, cursor, including private-mode `?25l` from progress bars) and
-// OSC (titles, hyperlinks) sequences, per ECMA-48.
-// eslint-disable-next-line no-control-regex
-const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
+// OSC (titles, hyperlinks) sequences, per ECMA-48. An OSC body cannot contain
+// ESC, so the body class excludes it: otherwise an ST-terminated OSC followed
+// later by a BEL-terminated one would swallow the text between them.
+const ANSI =
+  // eslint-disable-next-line no-control-regex
+  /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
 
 /** Kernel tracebacks are coloured for a terminal; the model does not need that. */
 export function stripAnsi(text: string): string {

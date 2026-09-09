@@ -167,11 +167,14 @@ export class KernelHandoff {
   /**
    * Execute one cell and report what happened.
    *
-   * `runCells` resolves false both for a kernel error (the traceback is in the
-   * outputs) and for a cell that never executed at all -- no kernel, kernel
-   * still starting or terminating, pending input, interrupted. The second
-   * kind leaves the outputs empty, or, for a replaced cell, STALE from its
-   * previous run, so it must not be reported as a clean run.
+   * `runCells` resolves false for a kernel error (the traceback is in the
+   * outputs) and for some of the ways a cell can fail to execute at all
+   * (pending input, kernel still initialising, interrupted); it resolves TRUE
+   * with nothing run when there is no kernel or the kernel is terminating.
+   * None of the did-not-run paths touch the outputs, so a replaced cell would
+   * still show its previous run; they are cleared first so that whatever is
+   * there afterwards came from this run, and an empty result on a did-not-run
+   * path is reported as an error rather than as a clean, silent run.
    */
   private async _run(
     notebookPanel: NotebookPanel,
@@ -180,8 +183,13 @@ export class KernelHandoff {
   ): Promise<Pick<ObservedRun, 'status' | 'stdout' | 'error'>> {
     const { content: notebook, sessionContext } = notebookPanel;
     const interrupt = () => {
-      void sessionContext.session?.kernel?.interrupt();
+      void sessionContext.session?.kernel?.interrupt().catch(() => {
+        // Already dead or gone; there is nothing left to interrupt.
+      });
     };
+    cell.model.sharedModel.transact(() => {
+      cell.model.clearExecution();
+    }, false);
     signal?.addEventListener('abort', interrupt, { once: true });
     let ran: boolean;
     try {
@@ -202,7 +210,10 @@ export class KernelHandoff {
     }
     const outcome = harvestOutputs(outputs);
 
-    if ((!ran || sessionContext.hasNoKernel) && outcome.status === 'ok') {
+    if (
+      (!ran || sessionContext.hasNoKernel || sessionContext.isTerminating) &&
+      outcome.status === 'ok'
+    ) {
       return {
         status: 'error',
         stdout: '',

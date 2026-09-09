@@ -84,4 +84,12 @@ describe('stripAnsi', () => {
     expect(stripAnsi('\u001b[?25l50%\u001b[?25h')).toBe('50%');
     expect(stripAnsi('\u001b]0;title\u0007done')).toBe('done');
   });
+
+  it('does not swallow text between an ST-terminated and a BEL-terminated OSC', () => {
+    expect(
+      stripAnsi(
+        '\u001b]8;;http://x\u001b\\link\u001b]8;;\u001b\\ then \u001b]0;t\u0007end'
+      )
+    ).toBe('link then end');
+  });
 });
