@@ -15,12 +15,32 @@ export interface ObservedRun {
   message: string;
 }
 
+/**
+ * Most text kept per field. The server reads only the tail of stdout and a
+ * bounded traceback (OBSERVATION_STDOUT_CHARS), and every observe request
+ * re-sends every run so far, so anything past this is bytes shipped for
+ * nothing -- a cell printing in a loop can produce megabytes.
+ */
+export const MAX_OBSERVED_CHARS = 8000;
+
+// CSI (colour, cursor, including private-mode `?25l` from progress bars) and
+// OSC (titles, hyperlinks) sequences, per ECMA-48.
 // eslint-disable-next-line no-control-regex
-const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
+const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g;
 
 /** Kernel tracebacks are coloured for a terminal; the model does not need that. */
 export function stripAnsi(text: string): string {
   return text.replace(ANSI, '');
+}
+
+/** Keep the end: that is where the summary line, or the raised error, is. */
+function tail(text: string): string {
+  if (text.length <= MAX_OBSERVED_CHARS) {
+    return text;
+  }
+  return `…[${text.length - MAX_OBSERVED_CHARS} chars truncated]\n${text.slice(
+    -MAX_OBSERVED_CHARS
+  )}`;
 }
 
 function asText(value: nbformat.MultilineString | undefined): string {
@@ -62,8 +82,8 @@ export function harvestOutputs(
 
   return {
     status: error === null ? 'ok' : 'error',
-    stdout: stripAnsi(stdout.join('')),
-    error
+    stdout: tail(stripAnsi(stdout.join(''))),
+    error: error === null ? null : tail(error)
   };
 }
 

@@ -1,4 +1,4 @@
-import { harvestOutputs, stripAnsi } from '../notebookRun';
+import { harvestOutputs, stripAnsi, MAX_OBSERVED_CHARS } from '../notebookRun';
 import type * as nbformat from '@jupyterlab/nbformat';
 
 const stream = (name: 'stdout' | 'stderr', text: string | string[]) =>
@@ -65,10 +65,23 @@ describe('harvestOutputs', () => {
       error: null
     });
   });
+
+  it('keeps only the tail of a huge stdout; the server reads no more', () => {
+    const lines = Array.from({ length: 5000 }, (_, i) => `line ${i}\n`);
+    const out = harvestOutputs([stream('stdout', lines)]);
+    expect(out.stdout.length).toBeLessThan(MAX_OBSERVED_CHARS + 100);
+    expect(out.stdout).toMatch(/^…\[\d+ chars truncated\]\n/);
+    expect(out.stdout).toMatch(/line 4999\n$/);
+  });
 });
 
 describe('stripAnsi', () => {
   it('removes colour and cursor codes', () => {
     expect(stripAnsi('\u001b[1;31mred\u001b[0m plain')).toBe('red plain');
+  });
+
+  it('removes private-mode and OSC sequences from progress bars', () => {
+    expect(stripAnsi('\u001b[?25l50%\u001b[?25h')).toBe('50%');
+    expect(stripAnsi('\u001b]0;title\u0007done')).toBe('done');
   });
 });

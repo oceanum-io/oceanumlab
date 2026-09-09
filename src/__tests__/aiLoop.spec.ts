@@ -45,7 +45,7 @@ function fakeDeps(
               status: failing.includes(b.content) ? 'error' : 'ok',
               stdout: `ran ${b.content}`,
               error: failing.includes(b.content) ? 'Boom' : null,
-              message: ''
+              message: response.message
             }))
         : [];
       return { message: response.message, runs };
@@ -163,8 +163,26 @@ describe('runChatLoop: limits', () => {
       opts({ autoRunCode: true, iterate: true, maxRounds: 3 })
     );
 
-    // 3 rounds placed: the opening plus two observations.
-    expect(observed).toHaveLength(2);
+    // The cap is on observe requests, checked after each one so the server's
+    // own at-cap explanation turn is always requested: 3 observes, then the
+    // round they produced is placed and the loop ends.
+    expect(observed).toHaveLength(3);
+  });
+
+  it('a code-free answer (what the server sends at its cap) ends the loop', async () => {
+    const { deps, observed } = fakeDeps(reply('Start.', code('s()')), [
+      reply('Capped: here is what happened.')
+    ]);
+
+    const text = await runChatLoop(
+      'q',
+      [],
+      deps,
+      opts({ autoRunCode: true, iterate: true, maxRounds: 1 })
+    );
+
+    expect(observed).toHaveLength(1);
+    expect(text).toBe('Start.\n\nCapped: here is what happened.');
   });
 
   it('Stop between rounds halts the loop and says so', async () => {
@@ -191,6 +209,37 @@ describe('runChatLoop: limits', () => {
     expect(text).toBe(`Start.\n\n${STOPPED}`);
   });
 
+  it('Stop while an observe request is in flight keeps what was already placed', async () => {
+    const controller = new AbortController();
+    const { deps, placed } = fakeDeps(reply('Step one.', code('a()')), []);
+    // The real router rejects with the fetch AbortError once Stop is pressed.
+    deps.observe = async () => {
+      controller.abort();
+      throw new DOMException('The user aborted a request.', 'AbortError');
+    };
+
+    const text = await runChatLoop(
+      'q',
+      [],
+      deps,
+      opts({ autoRunCode: true, iterate: true, signal: controller.signal })
+    );
+
+    expect(placed).toHaveLength(1);
+    expect(text).toBe(`Step one.\n\n${STOPPED}`);
+  });
+
+  it('an observe failure that is not a Stop still propagates', async () => {
+    const { deps } = fakeDeps(reply('Step one.', code('a()')), []);
+    deps.observe = async () => {
+      throw new Error('Backend error: 500');
+    };
+
+    await expect(
+      runChatLoop('q', [], deps, opts({ autoRunCode: true, iterate: true }))
+    ).rejects.toThrow('Backend error: 500');
+  });
+
   it('Stop during the first request returns Stopped without placing anything', async () => {
     const controller = new AbortController();
     const { deps, placed } = fakeDeps(reply('Start.', code('s()')), []);
@@ -200,6 +249,25 @@ describe('runChatLoop: limits', () => {
         response: reply('Start.', code('s()')),
         hasCodeCellSelected: false
       };
+    };
+
+    const text = await runChatLoop(
+      'q',
+      [],
+      deps,
+      opts({ signal: controller.signal })
+    );
+
+    expect(text).toBe(STOPPED);
+    expect(placed).toEqual([]);
+  });
+
+  it('Stop that rejects the first request returns Stopped, not an error', async () => {
+    const controller = new AbortController();
+    const { deps, placed } = fakeDeps(reply('Start.', code('s()')), []);
+    deps.route = async () => {
+      controller.abort();
+      throw new DOMException('The user aborted a request.', 'AbortError');
     };
 
     const text = await runChatLoop(

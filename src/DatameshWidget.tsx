@@ -703,23 +703,18 @@ function AIChatPanel({
           onKeyDown={handleKeyDown}
           disabled={loading}
         />
-        {loading ? (
-          <button
-            className="jp-mod-styled oceanum-ai-chat-send"
-            onClick={() => void commands.execute('oceanum-ai:stop')}
-            title="Stop the current response"
-          >
-            Stop
-          </button>
-        ) : (
-          <button
-            className="jp-mod-styled oceanum-ai-chat-send"
-            onClick={() => void handleSubmit()}
-            disabled={!input.trim()}
-          >
-            Send
-          </button>
-        )}
+        <button
+          className="jp-mod-styled oceanum-ai-chat-send"
+          onClick={() =>
+            void (loading
+              ? commands.execute('oceanum-ai:stop')
+              : handleSubmit())
+          }
+          disabled={!loading && !input.trim()}
+          title={loading ? 'Stop the current response' : undefined}
+        >
+          {loading ? 'Stop' : 'Send'}
+        </button>
       </div>
     </div>
   );

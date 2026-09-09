@@ -1,4 +1,4 @@
-import type { Block, ChatMessage, OceanumResponse } from './chatRouter';
+import type { ChatMessage, OceanumResponse } from './chatRouter';
 import type { ObservedRun } from './notebookRun';
 
 /** What `inject` reports back: the chat text, and what ran if anything did. */
@@ -25,7 +25,7 @@ export interface LoopDeps {
   ): Promise<OceanumResponse>;
   place(
     response: OceanumResponse,
-    options: { replaceCodeCell: boolean; autoRun: boolean }
+    options: { replaceCodeCell: boolean; autoRun: boolean; signal: AbortSignal }
   ): Promise<PlacedResponse>;
 }
 
@@ -34,7 +34,7 @@ export interface LoopOptions {
   autoRunCode: boolean;
   /** Send each run's output back and place what comes next. Workflow 2. */
   iterate: boolean;
-  /** Client-side mirror of the server's EXECUTE_MAX_ROUNDS. */
+  /** Safety net on observe requests; see `runChatLoop`. */
   maxRounds: number;
   signal: AbortSignal;
 }
@@ -53,13 +53,16 @@ export const STOPPED = 'Stopped.';
  *   autoRunCode on, iterate on   -> place, run, observe, repeat.  (workflow 2)
  *
  * `iterate` without `autoRunCode` is inert: nothing ran, so there is nothing
- * to observe. Stated here so the settings UI can grey it out honestly.
+ * to observe. That falls out of the data (no runs) rather than a guard.
  *
- * Rounds end when a response carries no code (the agent is done), at
- * `maxRounds` (the server strips code past its own cap, so the client mirrors
- * it rather than sending a request whose code it would never run), or on
- * Stop. Every round's message is kept: a chain that took three steps should
- * read as three steps, not as the last one.
+ * Rounds end when nothing ran (the agent answered without code, so it is
+ * done), or on Stop. The server enforces its own EXECUTE_MAX_ROUNDS: at the
+ * cap it still answers, explaining the last run with any code stripped, and
+ * that code-free answer ends the loop here. `maxRounds` is therefore only a
+ * safety net against a server that keeps sending code, checked AFTER the
+ * observe so the server's explanation turn is always requested. Every round's
+ * message is kept: a chain that took three steps should read as three steps,
+ * not as the last one.
  */
 export async function runChatLoop(
   prompt: string,
@@ -71,42 +74,55 @@ export async function runChatLoop(
   const messages: string[] = [];
   const runs: ObservedRun[] = [];
 
-  const first = await deps.route(prompt, history, signal);
+  let response: OceanumResponse;
+  let replaceCodeCell: boolean;
+  try {
+    const first = await deps.route(prompt, history, signal);
+    response = first.response;
+    replaceCodeCell = first.hasCodeCellSelected;
+  } catch (err) {
+    if (signal.aborted) {
+      return STOPPED;
+    }
+    throw err;
+  }
   if (signal.aborted) {
     return STOPPED;
   }
 
-  let response = first.response;
-  let replaceCodeCell = first.hasCodeCellSelected;
-
   for (let round = 1; ; round++) {
     const placed = await deps.place(response, {
       replaceCodeCell,
-      autoRun: options.autoRunCode
+      autoRun: options.autoRunCode,
+      signal
     });
     messages.push(placed.message);
-    // The agent's explanation travels with the code it explains.
-    for (const run of placed.runs) {
-      runs.push({ ...run, message: response.message });
-    }
+    runs.push(...placed.runs);
     replaceCodeCell = false;
 
     if (signal.aborted) {
       messages.push(STOPPED);
       break;
     }
-    if (!options.autoRunCode || !options.iterate) {
-      break;
-    }
-    if (!hasCode(response.blocks) || placed.runs.length === 0) {
+    if (!options.iterate || placed.runs.length === 0) {
       // Nothing ran this round, so there is nothing to observe.
       break;
     }
-    if (round >= options.maxRounds) {
+    if (round > options.maxRounds) {
       break;
     }
 
-    response = await deps.observe(prompt, history, runs, signal);
+    try {
+      response = await deps.observe(prompt, history, runs, signal);
+    } catch (err) {
+      // Stop pressed while the request was in flight. What was already placed
+      // and explained stays in the chat; only the next step is dropped.
+      if (signal.aborted) {
+        messages.push(STOPPED);
+        break;
+      }
+      throw err;
+    }
     if (signal.aborted) {
       messages.push(STOPPED);
       break;
@@ -114,8 +130,4 @@ export async function runChatLoop(
   }
 
   return messages.filter(m => m.trim().length > 0).join('\n\n');
-}
-
-function hasCode(blocks: Block[]): boolean {
-  return blocks.some(b => b.type === 'code');
 }

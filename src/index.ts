@@ -14,14 +14,10 @@ import { INotebookTracker } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
-import {
-  ChatRouter,
-  ChatRouterError,
-  ChatStopped,
-  ChatMessage
-} from './chatRouter';
+import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
+import { MAX_OBSERVE_ROUNDS } from './constants';
 
 import '../style/index.css';
 
@@ -161,10 +157,6 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         const router = new ChatRouter(settings, notebookTracker);
         const handoff = new KernelHandoff(notebookTracker, app.commands);
 
-        // Mirrors the server's EXECUTE_MAX_ROUNDS. Past it the server strips
-        // any code from its answer, so there would be nothing to run anyway.
-        const MAX_ROUNDS = 5;
-
         // The run in flight, if any. Command args must be JSON, so a signal
         // cannot be passed in; Stop is a second command that reaches it here.
         let current: AbortController | null = null;
@@ -186,10 +178,9 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             }
             // Read per prompt, not once at load, so a settings change applies
             // to the next question without a reload.
-            const autoRunCode =
-              (settings.get('autoRunCode').composite as boolean) ?? false;
-            const iterate =
-              (settings.get('iterate').composite as boolean) ?? false;
+            const autoRunCode = settings.get('autoRunCode')
+              .composite as boolean;
+            const iterate = settings.get('iterate').composite as boolean;
 
             current?.abort();
             const controller = new AbortController();
@@ -207,12 +198,14 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
                 {
                   autoRunCode,
                   iterate,
-                  maxRounds: MAX_ROUNDS,
+                  maxRounds: MAX_OBSERVE_ROUNDS,
                   signal: controller.signal
                 }
               );
             } catch (err) {
-              if (err instanceof ChatStopped) {
+              // Anything that failed because the user pressed Stop is not an
+              // error to them: the aborted fetch, or its body read.
+              if (controller.signal.aborted) {
                 return STOPPED;
               }
               if (err instanceof ChatRouterError) {

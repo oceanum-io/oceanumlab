@@ -192,9 +192,10 @@ export class ChatRouter {
         signal
       });
     } catch (err) {
-      // The user pressed Stop. Not a failure, and not "could not reach".
+      // The user pressed Stop. Not a failure, and not "could not reach"; the
+      // caller checks `signal.aborted` and stays quiet.
       if (signal?.aborted) {
-        throw new ChatStopped();
+        throw err;
       }
       throw new ChatRouterError(
         `Could not reach Oceanum AI backend at ${OCEANUM_AI_BACKEND_URL}. Is it running?`
@@ -216,6 +217,8 @@ export class ChatRouter {
       throw new ChatRouterError(`Backend error: ${detail}`, response.status);
     }
 
+    // Stop can also land while the body is still being read; that rejects
+    // here, not in the fetch above, and the caller treats it the same way.
     return response.json();
   }
 }
@@ -226,12 +229,4 @@ interface ChatPayload {
   codeContext?: string;
   chatHistory?: ChatMessage[];
   notebookCells?: string[];
-}
-
-/** Thrown when a request was cancelled by Stop. Distinct so callers can stay quiet. */
-export class ChatStopped extends Error {
-  constructor() {
-    super('Stopped.');
-    this.name = 'ChatStopped';
-  }
 }

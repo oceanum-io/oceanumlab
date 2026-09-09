@@ -115,25 +115,6 @@
         "**/__tests__",
         "ui-tests"
     ],
-    "eslintConfig": {
-        "extends": [
-            "eslint:recommended",
-            "plugin:@typescript-eslint/eslint-recommended",
-            "plugin:@typescript-eslint/recommended",
-            "plugin:prettier/recommended"
-        ],
-        "parser": "@typescript-eslint/parser",
-        "parserOptions": {
-            "project": "tsconfig.json",
-            "sourceType": "module"
-        },
-        "plugins": [
-            "@typescript-eslint"
-        ],
-        "base": {
-            "name": "oceanumlab"
-        }
-    },
     "prettier": {
         "singleQuote": true,
         "trailingComma": "none",
