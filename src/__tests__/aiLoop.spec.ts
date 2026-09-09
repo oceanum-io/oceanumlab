@@ -147,6 +147,27 @@ describe('runChatLoop: the three workflows', () => {
     });
     expect(observed[1][1]).toMatchObject({ code: 'good()', status: 'ok' });
   });
+
+  it('a cell that could not run at all ends the loop without observing', async () => {
+    const { deps, observed } = fakeDeps(reply('Try.', code('a()')), [
+      reply('Again.', code('b()'))
+    ]);
+    const place = deps.place;
+    deps.place = async (response, o) => ({
+      ...(await place(response, o)),
+      halted: true
+    });
+
+    const text = await runChatLoop(
+      'q',
+      [],
+      deps,
+      opts({ autoRunCode: true, iterate: true })
+    );
+
+    expect(observed).toEqual([]);
+    expect(text).toBe('Try.');
+  });
 });
 
 describe('runChatLoop: limits', () => {

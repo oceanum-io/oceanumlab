@@ -4,10 +4,11 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
+import type { ISessionContext } from '@jupyterlab/apputils';
 import { CommandRegistry } from '@lumino/commands';
 import type * as nbformat from '@jupyterlab/nbformat';
 import { OceanumResponse } from './chatRouter';
-import { harvestOutputs, ObservedRun } from './notebookRun';
+import { harvestOutputs, ObservedRun, RunOutcome } from './notebookRun';
 import type { PlacedResponse } from './aiLoop';
 
 export interface InjectOptions {
@@ -82,6 +83,7 @@ export class KernelHandoff {
     options: InjectOptions = {}
   ): Promise<PlacedResponse> {
     const runs: ObservedRun[] = [];
+    let halted = false;
     if (response.blocks.length === 0) {
       // Nothing to place — just the message for the chat window.
       return { message: response.message, runs };
@@ -112,7 +114,9 @@ export class KernelHandoff {
       }
       if (block.type === 'code') {
         let cell: CodeCell | null = null;
-        if (replaceTarget) {
+        // The target can be gone by now: a markdown block placed before this
+        // one yielded while it rendered, and the user deleted the cell.
+        if (replaceTarget && !replaceTarget.isDisposed) {
           replaceTarget.model.sharedModel.setSource(block.content);
           cell = replaceTarget;
           replaceTarget = null;
@@ -138,14 +142,23 @@ export class KernelHandoff {
         // the active one (a markdown block placed before it moved the
         // selection), and the user may have several cells selected. Reading
         // the outputs afterwards is what makes the iterate workflow possible
-        // -- it is the only place the kernel's answer can be seen.
-        if (options.autoRun && cell) {
-          const outcome = await this._run(notebookPanel, cell, options.signal);
+        // -- it is the only place the kernel's answer can be seen. A blank
+        // block is placed but not run: `CodeCell.execute` would send nothing
+        // and the empty result would read as a kernel failure.
+        if (options.autoRun && cell && block.content.trim()) {
+          const { outcome, executed } = await this._run(
+            notebookPanel,
+            cell,
+            options.signal
+          );
           runs.push({
             code: block.content,
             message: response.message,
             ...outcome
           });
+          if (!executed) {
+            halted = true;
+          }
         }
       } else {
         NotebookActions.insertBelow(notebook);
@@ -164,11 +177,11 @@ export class KernelHandoff {
       }
     }
 
-    return { message: response.message, runs };
+    return { message: response.message, runs, halted };
   }
 
   /**
-   * Execute one cell and report what happened.
+   * Execute one cell and report what happened, and whether it happened at all.
    *
    * `runCells` resolves false for a kernel error (the traceback is in the
    * outputs) and for some of the ways a cell can fail to execute at all
@@ -191,19 +204,21 @@ export class KernelHandoff {
     notebookPanel: NotebookPanel,
     cell: CodeCell,
     signal?: AbortSignal
-  ): Promise<Pick<ObservedRun, 'status' | 'stdout' | 'error'>> {
+  ): Promise<{ outcome: RunOutcome; executed: boolean }> {
     const { content: notebook, sessionContext } = notebookPanel;
     if (sessionContext.kernelDisplayStatus === 'initializing') {
       // A kernel is starting (for a notebook this call just created, say).
       // Bounded: `ready` never resolves if the kernel ends up needing to be
       // selected by hand.
-      await Promise.race([
-        sessionContext.ready,
-        new Promise<void>(resolve => setTimeout(resolve, KERNEL_START_WAIT_MS))
-      ]);
+      await waitForReady(sessionContext, signal);
       if (signal?.aborted) {
         return didNotRun('stopped before the kernel was ready');
       }
+    }
+    // Closing the notebook, or deleting the cell, disposes it and nulls its
+    // model; every access below would throw and take the whole reply with it.
+    if (cell.isDisposed) {
+      return didNotRun('the cell was deleted or its notebook closed');
     }
     if (sessionContext.pendingInput) {
       return didNotRun(
@@ -225,11 +240,17 @@ export class KernelHandoff {
       ran = await NotebookActions.runCells(notebook, [cell], sessionContext);
     } catch (err) {
       // A dead kernel rejects rather than resolving false. Report it like any
-      // other did-not-run so the rounds already placed keep their messages.
+      // other did-not-run so the rounds already placed keep their messages,
+      // and log it: a rejection can also be a fault inside JupyterLab's
+      // executor, and the chat line alone would hide that.
+      console.error('Oceanum AI: cell execution failed', err);
       ran = false;
       failure = err instanceof Error ? err.message : String(err);
     } finally {
       signal?.removeEventListener('abort', interrupt);
+    }
+    if (cell.isDisposed) {
+      return didNotRun('the cell was deleted or its notebook closed');
     }
 
     // Only stream and error outputs are wanted; serialising a rendered plot
@@ -252,16 +273,38 @@ export class KernelHandoff {
         failure ?? 'no kernel available yet, or the execution was interrupted'
       );
     }
-    return outcome;
+    return { outcome, executed: true };
   }
 }
 
-function didNotRun(
-  reason: string
-): Pick<ObservedRun, 'status' | 'stdout' | 'error'> {
+/**
+ * Resolve when the session context is ready, when Stop is pressed, or after
+ * `KERNEL_START_WAIT_MS`, whichever comes first. Stop is raced too so the
+ * button answers at once rather than after the kernel, or the timeout.
+ */
+function waitForReady(
+  sessionContext: ISessionContext,
+  signal?: AbortSignal
+): Promise<void> {
+  return new Promise<void>(resolve => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, KERNEL_START_WAIT_MS);
+    void sessionContext.ready.then(done);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+function didNotRun(reason: string): { outcome: RunOutcome; executed: false } {
   return {
-    status: 'error',
-    stdout: '',
-    error: `The cell did not execute (${reason}).`
+    outcome: {
+      status: 'error',
+      stdout: '',
+      error: `The cell did not execute (${reason}).`
+    },
+    executed: false
   };
 }

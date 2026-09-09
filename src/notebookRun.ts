@@ -15,6 +15,9 @@ export interface ObservedRun {
   message: string;
 }
 
+/** The part of a run the kernel decides; what `harvestOutputs` reads off it. */
+export type RunOutcome = Pick<ObservedRun, 'status' | 'stdout' | 'error'>;
+
 /**
  * Most text kept per field. The server reads only the tail of stdout and a
  * bounded traceback (OBSERVATION_STDOUT_CHARS), and every observe request
@@ -65,7 +68,7 @@ function asText(value: nbformat.MultilineString | undefined): string {
  */
 export function harvestOutputs(
   outputs: readonly nbformat.IOutput[]
-): Pick<ObservedRun, 'status' | 'stdout' | 'error'> {
+): RunOutcome {
   const stdout: string[] = [];
   const stderr: string[] = [];
   let error: string | null = null;

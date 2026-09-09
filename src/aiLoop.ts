@@ -5,6 +5,12 @@ import type { ObservedRun } from './notebookRun';
 export interface PlacedResponse {
   message: string;
   runs: ObservedRun[];
+  /**
+   * A code cell could not be executed at all (no kernel, pending input, the
+   * notebook closed, Stop). Its run says so; observing it would only bring
+   * back more code that cannot run either.
+   */
+  halted?: boolean;
 }
 
 /** The pieces the loop needs, injected so it can be tested without a notebook. */
@@ -104,8 +110,9 @@ export async function runChatLoop(
       messages.push(STOPPED);
       break;
     }
-    if (!options.iterate || placed.runs.length === 0) {
-      // Nothing ran this round, so there is nothing to observe.
+    if (!options.iterate || placed.runs.length === 0 || placed.halted) {
+      // Nothing ran this round, or nothing could, so there is nothing to
+      // observe.
       break;
     }
     if (round > options.maxRounds) {
