@@ -165,3 +165,57 @@ describe('phases the client reports about itself', () => {
     }
   });
 });
+
+describe('line endings other than LF', () => {
+  // The spec allows CRLF, bare CR and LF. Our backend sends LF, but that is a
+  // statement about one hop -- anything between it and the browser may rewrite
+  // them, and the failure if it does is TOTAL rather than partial: the frame
+  // separator never matches, zero events parse, and the caller reports the
+  // response as incomplete. Measured before this was handled: 0 events from a
+  // well-formed CRLF stream.
+
+  it('reads a CRLF stream', () => {
+    return expect(
+      collect(
+        streamOf(
+          'event: status\r\ndata: {"phase":"generating"}\r\n\r\n',
+          'event: done\r\ndata: {"message":"hi"}\r\n\r\n'
+        )
+      )
+    ).resolves.toEqual([
+      { event: 'status', data: '{"phase":"generating"}' },
+      { event: 'done', data: '{"message":"hi"}' }
+    ]);
+  });
+
+  it('reads a bare-CR stream', async () => {
+    const events = await collect(
+      streamOf('event: done\rdata: {"message":"hi"}\r\r')
+    );
+
+    expect(events).toEqual([{ event: 'done', data: '{"message":"hi"}' }]);
+  });
+
+  it('does not invent a frame when a CRLF is split across chunks', async () => {
+    // The subtlety the fix exists for. A chunk ending in `\r` whose `\n`
+    // arrives next must not be converted early: doing so manufactures a blank
+    // line, and a blank line is a frame boundary, so one event becomes two
+    // malformed ones.
+    const events = await collect(
+      streamOf('event: done\r\ndata: {"message":"hi"}\r', '\n\r\n')
+    );
+
+    expect(events).toEqual([{ event: 'done', data: '{"message":"hi"}' }]);
+  });
+
+  it('leaves no carriage return in the payload', async () => {
+    // A stray `\r` on the end of the data would break JSON.parse for the
+    // caller, which is the same silent failure one layer along.
+    const events = await collect(
+      streamOf('event: done\r\ndata: {"message":"hi"}\r\n\r\n')
+    );
+
+    expect(events[0].data).not.toContain('\r');
+    expect(() => JSON.parse(events[0].data)).not.toThrow();
+  });
+});
