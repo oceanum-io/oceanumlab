@@ -2,6 +2,8 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
+import type { Progress } from './progress';
+import { readSse } from './sse';
 import type { ObservedRun } from './notebookRun';
 
 /** One thing the backend asks us to place in the notebook. */
@@ -81,10 +83,11 @@ export class ChatRouter {
   async route(
     prompt: string,
     chatHistory: ChatMessage[] = [],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: Progress) => void
   ): Promise<RouteResult> {
     const { payload, isCodeCell, context } = this._gather(prompt, chatHistory);
-    const data = await this._send('/api/chat', payload, signal);
+    const data = await this._send('/api/chat', payload, signal, onProgress);
     return {
       response: asOceanumResponse(data),
       hasCodeCellSelected: isCodeCell && context.trim().length > 0
@@ -100,13 +103,15 @@ export class ChatRouter {
     prompt: string,
     chatHistory: ChatMessage[],
     runs: ObservedRun[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: Progress) => void
   ): Promise<OceanumResponse> {
     const { payload } = this._gather(prompt, chatHistory);
     const data = await this._send(
       '/api/chat/observe',
       { ...payload, runs },
-      signal
+      signal,
+      onProgress
     );
     return asOceanumResponse(data);
   }
@@ -171,7 +176,8 @@ export class ChatRouter {
   private async _send(
     path: string,
     payload: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: Progress) => void
   ): Promise<unknown> {
     const token = this._settings.get('datameshToken').composite as string;
     if (!token) {
@@ -186,7 +192,12 @@ export class ChatRouter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Datamesh-Token': token
+          'X-Datamesh-Token': token,
+          // Ask for the streamed form only when someone is listening. The
+          // server requires the media type to be NAMED -- a wildcard never
+          // selects it -- so omitting this is what keeps the plain JSON path
+          // byte-identical to what it always was.
+          ...(onProgress ? { Accept: 'text/event-stream' } : {})
         },
         body: JSON.stringify(payload),
         signal
@@ -219,7 +230,80 @@ export class ChatRouter {
 
     // Stop can also land while the body is still being read; that rejects
     // here, not in the fetch above, and the caller treats it the same way.
+    if (onProgress && isEventStream(response)) {
+      return this._drain(response, onProgress, signal);
+    }
     return response.json();
+  }
+
+  /**
+   * Read the streamed form, reporting progress, and return the final answer.
+   *
+   * The `done` event is authoritative: the events before it are for the user
+   * to look at, not for the client to reassemble. Anything else and a client
+   * that missed a frame would silently answer with less than the agent said.
+   */
+  private async _drain(
+    response: Response,
+    onProgress: (progress: Progress) => void,
+    signal?: AbortSignal
+  ): Promise<unknown> {
+    if (!response.body) {
+      // A proxy buffered the whole response, or this runtime has no
+      // ReadableStream. Either way there is nothing to stream; the body is
+      // still the answer, so fall back rather than fail.
+      return response.json();
+    }
+
+    let answer: unknown;
+    for await (const event of readSse(response.body, signal)) {
+      if (event.event === 'status') {
+        const data = parseJson<Progress>(event.data);
+        if (data?.phase) {
+          onProgress(data);
+        }
+      } else if (event.event === 'done') {
+        answer = parseJson<unknown>(event.data);
+      } else if (event.event === 'error') {
+        const data = parseJson<{ detail?: string; status_code?: number }>(
+          event.data
+        );
+        // The status was 200 before this could happen, so the failure travels
+        // in the frame and there was nothing for the check above to throw on.
+        throw new ChatRouterError(
+          `Backend error: ${data?.detail ?? 'the request failed'}`,
+          data?.status_code
+        );
+      }
+    }
+
+    if (answer === undefined) {
+      // The stream ended without its terminal event -- a dropped connection,
+      // or a proxy closing a response that looked idle. Treated as a failure
+      // rather than a partial answer, which is indistinguishable from a
+      // complete one once it reaches the chat.
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      throw new ChatRouterError('The response ended before it was complete.');
+    }
+    return answer;
+  }
+}
+
+function isEventStream(response: Response): boolean {
+  return (
+    response.headers.get('content-type')?.includes('text/event-stream') ?? false
+  );
+}
+
+/** Parse one event's data, returning null rather than throwing: a malformed
+ * frame should cost a progress update, not the answer. */
+function parseJson<T>(data: string): T | null {
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    return null;
   }
 }
 

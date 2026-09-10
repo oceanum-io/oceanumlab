@@ -15,6 +15,7 @@ import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { reportProgress } from './progress';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
 import { MAX_OBSERVE_ROUNDS } from './constants';
@@ -186,13 +187,17 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             const controller = new AbortController();
             current = controller;
             try {
+              // Cleared in the `finally` below however this ends, so the last
+              // phase does not sit on screen after the answer has arrived --
+              // or after Stop.
               return await runChatLoop(
                 prompt,
                 chatHistory,
                 {
-                  route: (p, h, signal) => router.route(p, h, signal),
+                  route: (p, h, signal) =>
+                    router.route(p, h, signal, reportProgress),
                   observe: (p, h, runs, signal) =>
-                    router.observe(p, h, runs, signal),
+                    router.observe(p, h, runs, signal, reportProgress),
                   place: (response, opts) => handoff.inject(response, opts)
                 },
                 {
@@ -214,6 +219,10 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
                 console.error('Oceanum AI: unexpected error', err);
               }
             } finally {
+              // However this ended -- answered, failed, or stopped -- the
+              // agent is no longer doing anything, so the last phase must not
+              // sit on screen claiming otherwise.
+              reportProgress(null);
               if (current === controller) {
                 current = null;
               }
