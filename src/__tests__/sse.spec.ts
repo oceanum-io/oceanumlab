@@ -138,3 +138,30 @@ describe('describeProgress', () => {
     expect(describeProgress({ phase: 'something_new' })).toBe('Working…');
   });
 });
+
+describe('phases the client reports about itself', () => {
+  // Everything else names something the AGENT is doing. These two are the
+  // notebook's turn, and they exist because the last agent phase used to stay
+  // on screen while a cell ran -- telling the user the agent was reading
+  // dataset details when their own code was executing. That is a worse claim
+  // than the vague "Thinking…" it replaced.
+
+  it('says the code is running', () => {
+    expect(describeProgress({ phase: 'running' })).toBe('Running the code…');
+  });
+
+  it('says the code is being placed when auto-run is off', () => {
+    expect(describeProgress({ phase: 'placing' })).toBe(
+      'Adding the code to the notebook…'
+    );
+  });
+
+  it('never claims the agent is working while the notebook is', () => {
+    // The specific regression: a phase the client reports must not fall
+    // through to wording about the agent.
+    for (const phase of ['running', 'placing']) {
+      expect(describeProgress({ phase })).not.toBe('Thinking…');
+      expect(describeProgress({ phase })).not.toBe('Working…');
+    }
+  });
+});

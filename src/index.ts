@@ -198,7 +198,19 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
                     router.route(p, h, signal, reportProgress),
                   observe: (p, h, runs, signal) =>
                     router.observe(p, h, runs, signal, reportProgress),
-                  place: (response, opts) => handoff.inject(response, opts)
+                  place: (response, opts) => {
+                    // The notebook's turn, not the agent's. Without this the
+                    // last phase the AGENT reported stays on screen while a
+                    // cell is running, so the user is told the agent is
+                    // reading dataset details when what is actually happening
+                    // is their own code executing. That is a worse claim than
+                    // the "Thinking…" it replaced, which was vague rather than
+                    // wrong.
+                    reportProgress({
+                      phase: autoRunCode ? 'running' : 'placing'
+                    });
+                    return handoff.inject(response, opts);
+                  }
                 },
                 {
                   autoRunCode,

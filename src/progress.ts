@@ -68,7 +68,12 @@ const TOOL_LABELS: Record<string, string> = {
 
 const PHASE_LABELS: Record<string, string> = {
   generating: 'Thinking…',
-  interpreting: 'Reading the result…'
+  interpreting: 'Reading the result…',
+  // Reported by the client, not the server: these two are the notebook's turn.
+  // Everything else here names something the agent is doing, and saying so
+  // while a cell runs would be actively false rather than merely vague.
+  running: 'Running the code…',
+  placing: 'Adding the code to the notebook…'
 };
 
 export function describeProgress(progress: Progress | null): string {
