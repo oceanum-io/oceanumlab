@@ -652,9 +652,19 @@ function AIChatPanel({
     setLoading(false);
     setHistoryIndex(-1);
     setTempInput('');
-    const pinned = await commands.execute('oceanum-ai:new-chat');
-    if (mine === conversation.current) {
-      setContext((pinned as string | null) ?? null);
+    try {
+      const pinned = await commands.execute('oceanum-ai:new-chat');
+      if (mine === conversation.current) {
+        setContext((pinned as string | null) ?? null);
+      }
+    } catch (err: any) {
+      // The chat commands register once settings have loaded, so a click
+      // before that has nothing to reach. Say so, rather than leave the old
+      // conversation's "Context:" line under a cleared chat.
+      if (mine === conversation.current) {
+        setContext(undefined);
+        setError(err?.message ?? 'Oceanum AI is not ready yet.');
+      }
     }
   };
 

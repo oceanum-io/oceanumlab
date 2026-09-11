@@ -15,6 +15,7 @@ import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { ConversationPin } from './conversationPin';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
 import { MAX_OBSERVE_ROUNDS } from './constants';
@@ -154,43 +155,21 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
     settingRegistry
       .load(SETTINGS_ID)
       .then(settings => {
-        // The notebook the current conversation is about: undefined until the
-        // conversation starts, null when it has none. It is pinned when the
-        // conversation starts -- New chat, or the first message after the panel
-        // opens -- from the ACTIVE TAB, and kept for the whole conversation, so
-        // switching tabs mid-thread does not change what the agent is shown.
-        let pinned: NotebookPanel | null | undefined = undefined;
-
-        const activeNotebook = (): NotebookPanel | null => {
+        // The notebook the current conversation is about. `app.shell` tracks
+        // only main-area tabs, so its current widget is the active tab even
+        // while focus is in this sidebar.
+        const pin = new ConversationPin(() => {
           const widget = app.shell.currentWidget;
           return widget && notebookTracker.has(widget)
             ? (widget as NotebookPanel)
             : null;
-        };
-        const pinActive = (): string | null => {
-          pinned = activeNotebook();
-          return pinned?.title.label ?? null;
-        };
-        // The pinned notebook, forgotten once it has been closed: a disposed
-        // panel still answers, but with cells that are no longer anywhere.
-        const pinnedNotebook = (): NotebookPanel | null => {
-          if (pinned?.isDisposed) {
-            pinned = null;
-          }
-          return pinned ?? null;
-        };
-
-        const router = new ChatRouter(settings, () => {
-          const panel = pinnedNotebook();
-          // Answers are placed in the tracker's current notebook (see
-          // KernelHandoff), so that is the one the selected cell may come from.
-          return panel
-            ? {
-                notebook: panel.content,
-                receivesAnswers: panel === notebookTracker.currentWidget
-              }
-            : null;
         });
+
+        // Answers are placed in the tracker's current notebook (see
+        // KernelHandoff), so that is the one the selected cell may come from.
+        const router = new ChatRouter(settings, () =>
+          pin.forRequest(notebookTracker.currentWidget)
+        );
         const handoff = new KernelHandoff(notebookTracker, app.commands);
 
         // The run in flight, if any. Command args must be JSON, so a signal
@@ -210,20 +189,16 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             // The run in flight belongs to the conversation being thrown away:
             // stop it placing anything more. The panel discards its result.
             current?.abort();
-            return pinActive();
+            return pin.start();
           }
         });
 
         app.commands.addCommand('oceanum-ai:chat-context', {
           label: 'The notebook the current Oceanum AI chat is about',
-          execute: () => {
-            // The first message of a conversation nobody started with New chat
-            // starts it here, so that one behaves the same way.
-            if (pinned === undefined) {
-              return pinActive();
-            }
-            return pinnedNotebook()?.title.label ?? null;
-          }
+          // Starts the conversation if nothing has -- so the first message of
+          // one nobody started with New chat pins the same way -- and reports
+          // the pin either way.
+          execute: () => pin.ensure()
         });
 
         app.commands.addCommand('oceanum-ai:submit-prompt', {
@@ -236,9 +211,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             }
             // A caller that skipped 'oceanum-ai:chat-context' still gets a
             // conversation pinned the same way.
-            if (pinned === undefined) {
-              pinActive();
-            }
+            pin.ensure();
             // Read per prompt, not once at load, so a settings change applies
             // to the next question without a reload.
             const autoRunCode = settings.get('autoRunCode')
