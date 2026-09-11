@@ -1,10 +1,10 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { INotebookTracker } from '@jupyterlab/notebook';
-import { CodeCell } from '@jupyterlab/cells';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
 import type { Progress } from './progress';
 import { readSse } from './sse';
 import type { ObservedRun } from './notebookRun';
+import type { INotebookSnapshot } from './notebookContext';
+import { formatNotebookCells } from './notebookContext';
 
 /** One thing the backend asks us to place in the notebook. */
 export interface Block {
@@ -75,9 +75,15 @@ function asOceanumResponse(data: unknown): OceanumResponse {
 }
 
 export class ChatRouter {
+  /**
+   * @param _notebook What the conversation's notebook holds -- the one its
+   *   answers are placed in -- or null if there is nothing to send. Asked on
+   *   every request, so it follows the conversation rather than whichever tab
+   *   happens to be active.
+   */
   constructor(
     private _settings: ISettingRegistry.ISettings,
-    private _notebookTracker: INotebookTracker
+    private _notebook: () => Promise<INotebookSnapshot | null>
   ) {}
 
   async route(
@@ -86,7 +92,10 @@ export class ChatRouter {
     signal?: AbortSignal,
     onProgress?: (progress: Progress) => void
   ): Promise<RouteResult> {
-    const { payload, isCodeCell, context } = this._gather(prompt, chatHistory);
+    const { payload, isCodeCell, context } = await this._gather(
+      prompt,
+      chatHistory
+    );
     const data = await this._send('/api/chat', payload, signal, onProgress);
     return {
       response: asOceanumResponse(data),
@@ -106,7 +115,7 @@ export class ChatRouter {
     signal?: AbortSignal,
     onProgress?: (progress: Progress) => void
   ): Promise<OceanumResponse> {
-    const { payload } = this._gather(prompt, chatHistory);
+    const { payload } = await this._gather(prompt, chatHistory);
     const data = await this._send(
       '/api/chat/observe',
       { ...payload, runs },
@@ -116,33 +125,23 @@ export class ChatRouter {
     return asOceanumResponse(data);
   }
 
-  private _gather(
+  private async _gather(
     prompt: string,
     chatHistory: ChatMessage[]
-  ): { payload: ChatPayload; isCodeCell: boolean; context: string } {
-    // Get active cell source as context (best-effort)
+  ): Promise<{ payload: ChatPayload; isCodeCell: boolean; context: string }> {
     let context = '';
     let isCodeCell = false;
-    const notebookCells: string[] = [];
+    let notebookCells: string[] = [];
 
     try {
-      const notebook = this._notebookTracker.currentWidget?.content;
-      if (notebook) {
-        // Collect all code cells (without outputs)
-        for (const cell of notebook.widgets) {
-          if (cell instanceof CodeCell) {
-            const source = cell.model.sharedModel.getSource();
-            if (source.trim()) {
-              notebookCells.push(source);
-            }
-          }
-        }
-
-        // Get active cell info
-        if (notebook.activeCell) {
-          const activeCell = notebook.activeCell;
-          context = activeCell.model.sharedModel.getSource();
-          isCodeCell = activeCell instanceof CodeCell;
+      const snapshot = await this._notebook();
+      if (snapshot) {
+        notebookCells = formatNotebookCells(snapshot.cells);
+        // Answers are placed in this same notebook, so its selected cell is
+        // the one a code answer may replace.
+        if (snapshot.selected) {
+          context = snapshot.selected.source;
+          isCodeCell = snapshot.selected.isCode;
         }
       }
     } catch {
@@ -165,7 +164,7 @@ export class ChatRouter {
       payload.chatHistory = chatHistory;
     }
 
-    // Include all notebook code cells
+    // Include the conversation's notebook cells
     if (notebookCells.length > 0) {
       payload.notebookCells = notebookCells;
     }
