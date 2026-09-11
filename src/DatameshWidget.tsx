@@ -731,8 +731,8 @@ function AIChatPanel({
           <div className="oceanum-text-empty">
             Ask Oceanum AI to query and analyse data from Datamesh.
             <br></br>
-            Generated code will be automatically inserted into your notebook in
-            the curretly selected cell.
+            Answers go into this chat&apos;s notebook: the one in the active tab
+            when the chat starts, or a new one.
           </div>
         )}
         {messages.map((msg, i) => (

@@ -1,11 +1,6 @@
-import {
-  INotebookTracker,
-  NotebookActions,
-  NotebookPanel
-} from '@jupyterlab/notebook';
+import { NotebookActions, NotebookPanel } from '@jupyterlab/notebook';
 import { CodeCell } from '@jupyterlab/cells';
 import type { ISessionContext } from '@jupyterlab/apputils';
-import { CommandRegistry } from '@lumino/commands';
 import type * as nbformat from '@jupyterlab/nbformat';
 import { OceanumResponse } from './chatRouter';
 import { harvestOutputs, ObservedRun, RunOutcome } from './notebookRun';
@@ -28,45 +23,12 @@ export interface InjectOptions {
 const KERNEL_START_WAIT_MS = 10000;
 
 export class KernelHandoff {
-  constructor(
-    private _notebookTracker: INotebookTracker,
-    private _commands: CommandRegistry
-  ) {}
-
   /**
-   * Create a new Python 3 notebook if none exists.
+   * @param _target The conversation's notebook, brought to the front -- and
+   *   opened again first, if it was closed. Asked only when there is
+   *   something to place, so an answer with no blocks leaves the tabs alone.
    */
-  private async _ensureNotebook(): Promise<NotebookPanel | null> {
-    const notebookPanel = this._notebookTracker.currentWidget;
-    if (notebookPanel) {
-      return notebookPanel;
-    }
-
-    // Create a new Python 3 notebook
-    try {
-      await this._commands.execute('notebook:create-new', {
-        kernelName: 'python3'
-      });
-
-      // Wait for the notebook to be created and tracked
-      return new Promise(resolve => {
-        const checkNotebook = () => {
-          const panel = this._notebookTracker.currentWidget;
-          if (panel) {
-            resolve(panel);
-          } else {
-            setTimeout(checkNotebook, 100);
-          }
-        };
-        // Give it a moment to initialize
-        setTimeout(checkNotebook, 200);
-        // Timeout after 5 seconds
-        setTimeout(() => resolve(null), 5000);
-      });
-    } catch {
-      return null;
-    }
-  }
+  constructor(private _target: () => Promise<NotebookPanel | null>) {}
 
   /**
    * Place every block the response carries, in order, and return the message
@@ -89,11 +51,12 @@ export class KernelHandoff {
       return { message: response.message, runs };
     }
 
-    // Ensure we have a notebook (create one if needed)
-    const notebookPanel = await this._ensureNotebook();
+    // Every answer goes into the conversation's notebook, whichever tab is in
+    // front, and that notebook is brought to the front so the user sees it.
+    const notebookPanel = await this._target();
     if (!notebookPanel) {
       return {
-        message: response.message + '\n\n(Could not create notebook)',
+        message: response.message + '\n\n(Could not open a notebook)',
         runs
       };
     }

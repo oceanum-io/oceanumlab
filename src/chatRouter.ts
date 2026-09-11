@@ -37,20 +37,6 @@ export interface RouteResult {
   hasCodeCellSelected: boolean;
 }
 
-/**
- * The notebook a conversation is about.
- *
- * `receivesAnswers` says whether it is also the notebook answers are placed
- * in. The server treats a selected code cell as the one its answer replaces,
- * so the selected cell is only sent when the two are the same notebook:
- * otherwise the agent would be asked to edit one notebook and its answer would
- * land in another.
- */
-export interface IChatNotebook {
-  notebook: Notebook;
-  receivesAnswers: boolean;
-}
-
 export class ChatRouterError extends Error {
   constructor(
     message: string,
@@ -89,13 +75,13 @@ function asOceanumResponse(data: unknown): OceanumResponse {
 
 export class ChatRouter {
   /**
-   * @param _notebook The notebook the current conversation is pinned to, or
-   *   null when it has none. Asked on every request, so it follows the
-   *   conversation rather than whichever tab happens to be active.
+   * @param _notebook The conversation's notebook -- the one its answers are
+   *   placed in -- or null if there is none. Asked on every request, so it
+   *   follows the conversation rather than whichever tab happens to be active.
    */
   constructor(
     private _settings: ISettingRegistry.ISettings,
-    private _notebook: () => IChatNotebook | null
+    private _notebook: () => Promise<Notebook | null>
   ) {}
 
   async route(
@@ -103,7 +89,10 @@ export class ChatRouter {
     chatHistory: ChatMessage[] = [],
     signal?: AbortSignal
   ): Promise<RouteResult> {
-    const { payload, isCodeCell, context } = this._gather(prompt, chatHistory);
+    const { payload, isCodeCell, context } = await this._gather(
+      prompt,
+      chatHistory
+    );
     const data = await this._send('/api/chat', payload, signal);
     return {
       response: asOceanumResponse(data),
@@ -122,7 +111,7 @@ export class ChatRouter {
     runs: ObservedRun[],
     signal?: AbortSignal
   ): Promise<OceanumResponse> {
-    const { payload } = this._gather(prompt, chatHistory);
+    const { payload } = await this._gather(prompt, chatHistory);
     const data = await this._send(
       '/api/chat/observe',
       { ...payload, runs },
@@ -131,21 +120,21 @@ export class ChatRouter {
     return asOceanumResponse(data);
   }
 
-  private _gather(
+  private async _gather(
     prompt: string,
     chatHistory: ChatMessage[]
-  ): { payload: ChatPayload; isCodeCell: boolean; context: string } {
+  ): Promise<{ payload: ChatPayload; isCodeCell: boolean; context: string }> {
     // Get active cell source as context (best-effort)
     let context = '';
     let isCodeCell = false;
     let notebookCells: string[] = [];
 
     try {
-      const target = this._notebook();
-      if (target) {
+      const notebook = await this._notebook();
+      if (notebook) {
         // Code and markdown cells, without outputs.
         const cells: IContextCell[] = [];
-        for (const cell of target.notebook.widgets) {
+        for (const cell of notebook.widgets) {
           const type = cell.model.type;
           if (type === 'code' || type === 'markdown') {
             cells.push({
@@ -156,9 +145,9 @@ export class ChatRouter {
         }
         notebookCells = formatNotebookCells(cells);
 
-        const activeCell = target.receivesAnswers
-          ? target.notebook.activeCell
-          : null;
+        // Answers are placed in this same notebook, so its selected cell is
+        // the one a code answer may replace.
+        const activeCell = notebook.activeCell;
         if (activeCell) {
           context = activeCell.model.sharedModel.getSource();
           isCodeCell = activeCell.model.type === 'code';
@@ -184,7 +173,7 @@ export class ChatRouter {
       payload.chatHistory = chatHistory;
     }
 
-    // Include the pinned notebook's cells
+    // Include the conversation's notebook cells
     if (notebookCells.length > 0) {
       payload.notebookCells = notebookCells;
     }

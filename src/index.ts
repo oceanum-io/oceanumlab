@@ -135,6 +135,46 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 };
 
 /**
+ * A new Python 3 notebook, made the active tab.
+ *
+ * `notebook:create-new` opens what it creates and, in JupyterLab 4, returns
+ * the panel; failing that, the panel is the next one the tracker gains -- not
+ * the tracker's current notebook, which would be some older one if creating
+ * had quietly failed.
+ */
+async function createNotebook(
+  app: JupyterFrontEnd,
+  tracker: INotebookTracker
+): Promise<NotebookPanel | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAdded:
+    | ((sender: INotebookTracker, panel: NotebookPanel) => void)
+    | undefined;
+  const added = new Promise<NotebookPanel | null>(resolve => {
+    timer = setTimeout(() => resolve(null), 5000);
+    onAdded = (_, panel) => resolve(panel);
+    tracker.widgetAdded.connect(onAdded);
+  });
+  try {
+    const created = await app.commands.execute('notebook:create-new', {
+      kernelName: 'python3'
+    });
+    const panel = created instanceof NotebookPanel ? created : await added;
+    if (panel) {
+      app.shell.activateById(panel.id);
+    }
+    return panel;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    if (onAdded) {
+      tracker.widgetAdded.disconnect(onAdded);
+    }
+  }
+}
+
+/**
  * Second plugin: Oceanum AI chat integration.
  * Wires ChatRouter → KernelHandoff and exposes the
  * `oceanum-ai:submit-prompt` command.
@@ -155,22 +195,39 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
     settingRegistry
       .load(SETTINGS_ID)
       .then(settings => {
-        // The notebook the current conversation is about. `app.shell` tracks
-        // only main-area tabs, so its current widget is the active tab even
-        // while focus is in this sidebar.
-        const pin = new ConversationPin(() => {
-          const widget = app.shell.currentWidget;
-          return widget && notebookTracker.has(widget)
-            ? (widget as NotebookPanel)
-            : null;
+        // The notebook the current conversation lives in: what the agent is
+        // shown, and where its answers go.
+        const pin = new ConversationPin({
+          // `app.shell` tracks only main-area tabs, so its current widget is
+          // the active tab even while focus is in this sidebar.
+          activeTab: () => {
+            const widget = app.shell.currentWidget;
+            return widget && notebookTracker.has(widget)
+              ? (widget as NotebookPanel)
+              : null;
+          },
+          create: () => createNotebook(app, notebookTracker),
+          reopen: async path => {
+            try {
+              const widget = await app.commands.execute('docmanager:open', {
+                path
+              });
+              return widget instanceof NotebookPanel ? widget : null;
+            } catch {
+              // Deleted, or renamed while closed: a new notebook takes over.
+              return null;
+            }
+          },
+          activate: panel => app.shell.activateById(panel.id)
         });
 
-        // Answers are placed in the tracker's current notebook (see
-        // KernelHandoff), so that is the one the selected cell may come from.
-        const router = new ChatRouter(settings, () =>
-          pin.forRequest(notebookTracker.currentWidget)
+        const router = new ChatRouter(
+          settings,
+          async () => (await pin.notebook())?.content ?? null
         );
-        const handoff = new KernelHandoff(notebookTracker, app.commands);
+        // Asked only when an answer has blocks to place: brings the
+        // conversation's notebook to the front, opening it again if closed.
+        const handoff = new KernelHandoff(() => pin.show());
 
         // The run in flight, if any. Command args must be JSON, so a signal
         // cannot be passed in; Stop is a second command that reaches it here.
@@ -197,7 +254,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
           label: 'The notebook the current Oceanum AI chat is about',
           // Starts the conversation if nothing has -- so the first message of
           // one nobody started with New chat pins the same way -- and reports
-          // the pin either way.
+          // its notebook either way.
           execute: () => pin.ensure()
         });
 
@@ -211,7 +268,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             }
             // A caller that skipped 'oceanum-ai:chat-context' still gets a
             // conversation pinned the same way.
-            pin.ensure();
+            await pin.ensure();
             // Read per prompt, not once at load, so a settings change applies
             // to the next question without a reload.
             const autoRunCode = settings.get('autoRunCode')

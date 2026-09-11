@@ -1,8 +1,12 @@
-import { ChatRouter, IChatNotebook } from '../chatRouter';
+import { ChatRouter } from '../chatRouter';
 
 interface IFakeCell {
   model: { type: string; sharedModel: { getSource: () => string } };
 }
+
+type RouterNotebook = Awaited<
+  ReturnType<ConstructorParameters<typeof ChatRouter>[1]>
+>;
 
 const cell = (type: string, source: string): IFakeCell => ({
   model: { type, sharedModel: { getSource: () => source } }
@@ -11,8 +15,8 @@ const cell = (type: string, source: string): IFakeCell => ({
 const notebook = (
   cells: IFakeCell[],
   activeCell: IFakeCell | null = null
-): IChatNotebook['notebook'] =>
-  ({ widgets: cells, activeCell }) as unknown as IChatNotebook['notebook'];
+): RouterNotebook =>
+  ({ widgets: cells, activeCell }) as unknown as RouterNotebook;
 
 const settings = {
   get: () => ({ composite: 'a-token' })
@@ -35,17 +39,14 @@ beforeEach(() => {
 });
 
 describe('ChatRouter: the notebook sent with a request', () => {
-  it('is the pinned notebook, code and markdown, whatever tab is active', async () => {
+  it('is the conversation notebook, code and markdown, raw cells left out', async () => {
     const pinned = notebook([
       cell('code', 'x = 1'),
       cell('markdown', '## Notes'),
       cell('raw', 'not python, not prose'),
       cell('code', 'y = x')
     ]);
-    const router = new ChatRouter(settings, () => ({
-      notebook: pinned,
-      receivesAnswers: false
-    }));
+    const router = new ChatRouter(settings, async () => pinned);
 
     await router.route('what does this do?');
 
@@ -56,37 +57,50 @@ describe('ChatRouter: the notebook sent with a request', () => {
     ]);
   });
 
-  it('carries the selected cell only when answers land in that notebook', async () => {
-    // The server treats a selected code cell as the one its answer replaces,
-    // and KernelHandoff replaces the selected cell of the notebook it places
-    // into. From any other notebook, that edit would land in the wrong place.
+  it('carries the selected cell of that notebook, which a code answer may replace', async () => {
     const selected = cell('code', 'df.head()');
-    const pinned = notebook([selected], selected);
+    const router = new ChatRouter(settings, async () =>
+      notebook([selected], selected)
+    );
 
-    let receivesAnswers = true;
-    const router = new ChatRouter(settings, () => ({
-      notebook: pinned,
-      receivesAnswers
-    }));
+    const result = await router.route('fix this');
 
-    const placing = await router.route('fix this');
     expect(sent?.codeContext).toBe('df.head()');
-    expect(placing.hasCodeCellSelected).toBe(true);
-
-    receivesAnswers = false;
-    const elsewhere = await router.route('fix this');
-    expect(sent?.codeContext).toBeUndefined();
-    expect(sent?.context).toBeUndefined();
-    expect(elsewhere.hasCodeCellSelected).toBe(false);
+    expect(result.hasCodeCellSelected).toBe(true);
   });
 
-  it('sends no notebook when the conversation has none', async () => {
-    const router = new ChatRouter(settings, () => null);
+  it('asks for the notebook on every request, so it follows the conversation', async () => {
+    let current = notebook([cell('code', 'a = 1')]);
+    const router = new ChatRouter(settings, async () => current);
+
+    await router.route('one');
+    expect(sent?.notebookCells).toEqual(['a = 1']);
+
+    current = notebook([cell('code', 'b = 2')]);
+    await router.route('two');
+    expect(sent?.notebookCells).toEqual(['b = 2']);
+  });
+
+  it('sends no notebook when there is none', async () => {
+    const router = new ChatRouter(settings, async () => null);
 
     await router.route('hello');
 
     expect(sent?.notebookCells).toBeUndefined();
     expect(sent?.codeContext).toBeUndefined();
     expect(sent?.context).toBeUndefined();
+  });
+
+  it('still sends the question when the notebook cannot be had', async () => {
+    // Context is best-effort; a notebook that could not be opened must not
+    // cost the user the answer.
+    const router = new ChatRouter(settings, async () => {
+      throw new Error('could not open');
+    });
+
+    await router.route('hello');
+
+    expect(sent?.prompt).toBe('hello');
+    expect(sent?.notebookCells).toBeUndefined();
   });
 });
