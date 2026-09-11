@@ -10,7 +10,7 @@ import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
-import { INotebookTracker } from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
@@ -154,7 +154,43 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
     settingRegistry
       .load(SETTINGS_ID)
       .then(settings => {
-        const router = new ChatRouter(settings, notebookTracker);
+        // The notebook the current conversation is about: undefined until the
+        // conversation starts, null when it has none. It is pinned when the
+        // conversation starts -- New chat, or the first message after the panel
+        // opens -- from the ACTIVE TAB, and kept for the whole conversation, so
+        // switching tabs mid-thread does not change what the agent is shown.
+        let pinned: NotebookPanel | null | undefined = undefined;
+
+        const activeNotebook = (): NotebookPanel | null => {
+          const widget = app.shell.currentWidget;
+          return widget && notebookTracker.has(widget)
+            ? (widget as NotebookPanel)
+            : null;
+        };
+        const pinActive = (): string | null => {
+          pinned = activeNotebook();
+          return pinned?.title.label ?? null;
+        };
+        // The pinned notebook, forgotten once it has been closed: a disposed
+        // panel still answers, but with cells that are no longer anywhere.
+        const pinnedNotebook = (): NotebookPanel | null => {
+          if (pinned?.isDisposed) {
+            pinned = null;
+          }
+          return pinned ?? null;
+        };
+
+        const router = new ChatRouter(settings, () => {
+          const panel = pinnedNotebook();
+          // Answers are placed in the tracker's current notebook (see
+          // KernelHandoff), so that is the one the selected cell may come from.
+          return panel
+            ? {
+                notebook: panel.content,
+                receivesAnswers: panel === notebookTracker.currentWidget
+              }
+            : null;
+        });
         const handoff = new KernelHandoff(notebookTracker, app.commands);
 
         // The run in flight, if any. Command args must be JSON, so a signal
@@ -168,6 +204,28 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
           }
         });
 
+        app.commands.addCommand('oceanum-ai:new-chat', {
+          label: 'Start a new Oceanum AI chat',
+          execute: () => {
+            // The run in flight belongs to the conversation being thrown away:
+            // stop it placing anything more. The panel discards its result.
+            current?.abort();
+            return pinActive();
+          }
+        });
+
+        app.commands.addCommand('oceanum-ai:chat-context', {
+          label: 'The notebook the current Oceanum AI chat is about',
+          execute: () => {
+            // The first message of a conversation nobody started with New chat
+            // starts it here, so that one behaves the same way.
+            if (pinned === undefined) {
+              return pinActive();
+            }
+            return pinnedNotebook()?.title.label ?? null;
+          }
+        });
+
         app.commands.addCommand('oceanum-ai:submit-prompt', {
           label: 'Submit prompt to Oceanum AI',
           execute: async (args: Record<string, unknown>) => {
@@ -175,6 +233,11 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             const chatHistory = (args['chatHistory'] as ChatMessage[]) ?? [];
             if (!prompt) {
               return;
+            }
+            // A caller that skipped 'oceanum-ai:chat-context' still gets a
+            // conversation pinned the same way.
+            if (pinned === undefined) {
+              pinActive();
             }
             // Read per prompt, not once at load, so a settings change applies
             // to the next question without a reload.

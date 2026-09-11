@@ -1,8 +1,9 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { INotebookTracker } from '@jupyterlab/notebook';
-import { CodeCell } from '@jupyterlab/cells';
+import type { Notebook } from '@jupyterlab/notebook';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
 import type { ObservedRun } from './notebookRun';
+import type { IContextCell } from './notebookContext';
+import { formatNotebookCells } from './notebookContext';
 
 /** One thing the backend asks us to place in the notebook. */
 export interface Block {
@@ -34,6 +35,20 @@ export interface ChatMessage {
 export interface RouteResult {
   response: OceanumResponse;
   hasCodeCellSelected: boolean;
+}
+
+/**
+ * The notebook a conversation is about.
+ *
+ * `receivesAnswers` says whether it is also the notebook answers are placed
+ * in. The server treats a selected code cell as the one its answer replaces,
+ * so the selected cell is only sent when the two are the same notebook:
+ * otherwise the agent would be asked to edit one notebook and its answer would
+ * land in another.
+ */
+export interface IChatNotebook {
+  notebook: Notebook;
+  receivesAnswers: boolean;
 }
 
 export class ChatRouterError extends Error {
@@ -73,9 +88,14 @@ function asOceanumResponse(data: unknown): OceanumResponse {
 }
 
 export class ChatRouter {
+  /**
+   * @param _notebook The notebook the current conversation is pinned to, or
+   *   null when it has none. Asked on every request, so it follows the
+   *   conversation rather than whichever tab happens to be active.
+   */
   constructor(
     private _settings: ISettingRegistry.ISettings,
-    private _notebookTracker: INotebookTracker
+    private _notebook: () => IChatNotebook | null
   ) {}
 
   async route(
@@ -118,26 +138,30 @@ export class ChatRouter {
     // Get active cell source as context (best-effort)
     let context = '';
     let isCodeCell = false;
-    const notebookCells: string[] = [];
+    let notebookCells: string[] = [];
 
     try {
-      const notebook = this._notebookTracker.currentWidget?.content;
-      if (notebook) {
-        // Collect all code cells (without outputs)
-        for (const cell of notebook.widgets) {
-          if (cell instanceof CodeCell) {
-            const source = cell.model.sharedModel.getSource();
-            if (source.trim()) {
-              notebookCells.push(source);
-            }
+      const target = this._notebook();
+      if (target) {
+        // Code and markdown cells, without outputs.
+        const cells: IContextCell[] = [];
+        for (const cell of target.notebook.widgets) {
+          const type = cell.model.type;
+          if (type === 'code' || type === 'markdown') {
+            cells.push({
+              kind: type,
+              source: cell.model.sharedModel.getSource()
+            });
           }
         }
+        notebookCells = formatNotebookCells(cells);
 
-        // Get active cell info
-        if (notebook.activeCell) {
-          const activeCell = notebook.activeCell;
+        const activeCell = target.receivesAnswers
+          ? target.notebook.activeCell
+          : null;
+        if (activeCell) {
           context = activeCell.model.sharedModel.getSource();
-          isCodeCell = activeCell instanceof CodeCell;
+          isCodeCell = activeCell.model.type === 'code';
         }
       }
     } catch {
@@ -160,7 +184,7 @@ export class ChatRouter {
       payload.chatHistory = chatHistory;
     }
 
-    // Include all notebook code cells
+    // Include the pinned notebook's cells
     if (notebookCells.length > 0) {
       payload.notebookCells = notebookCells;
     }
