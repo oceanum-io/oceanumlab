@@ -22,6 +22,7 @@ import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
+import { describeProgress, onProgress, type Progress } from './progress';
 
 // Configure marked for safe rendering
 marked.setOptions({
@@ -516,6 +517,12 @@ function AIChatPanel({
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [input, setInput] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [progress, setProgress] = React.useState<Progress | null>(null);
+
+  // What the agent is doing, as the backend reports it. A `/api/chat` call
+  // takes around fifty seconds and used to spend all of them showing the same
+  // three words, which read as a hang rather than as work.
+  React.useEffect(() => onProgress(setProgress), []);
   const [error, setError] = React.useState<string | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
@@ -760,7 +767,9 @@ function AIChatPanel({
         {loading && (
           <div className="oceanum-ai-chat-message oceanum-ai-chat-message--assistant">
             <span className="oceanum-ai-chat-role">AI</span>
-            <span className="oceanum-ai-chat-loading">Thinking…</span>
+            <span className="oceanum-ai-chat-loading">
+              {describeProgress(progress)}
+            </span>
           </div>
         )}
         {error && <div className="oceanum-ai-chat-error">{error}</div>}

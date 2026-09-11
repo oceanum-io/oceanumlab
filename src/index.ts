@@ -15,6 +15,7 @@ import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { reportProgress } from './progress';
 import { ConversationPin } from './conversationPin';
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
@@ -245,14 +246,30 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             const controller = new AbortController();
             current = controller;
             try {
+              // Cleared in the `finally` below however this ends, so the last
+              // phase does not sit on screen after the answer has arrived --
+              // or after Stop.
               return await runChatLoop(
                 prompt,
                 chatHistory,
                 {
-                  route: (p, h, signal) => router.route(p, h, signal),
+                  route: (p, h, signal) =>
+                    router.route(p, h, signal, reportProgress),
                   observe: (p, h, runs, signal) =>
-                    router.observe(p, h, runs, signal),
-                  place: (response, opts) => handoff.inject(response, opts)
+                    router.observe(p, h, runs, signal, reportProgress),
+                  place: (response, opts) => {
+                    // The notebook's turn, not the agent's. Without this the
+                    // last phase the AGENT reported stays on screen while a
+                    // cell is running, so the user is told the agent is
+                    // reading dataset details when what is actually happening
+                    // is their own code executing. That is a worse claim than
+                    // the "Thinking…" it replaced, which was vague rather than
+                    // wrong.
+                    reportProgress({
+                      phase: autoRunCode ? 'running' : 'placing'
+                    });
+                    return handoff.inject(response, opts);
+                  }
                 },
                 {
                   autoRunCode,
@@ -273,6 +290,10 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
                 console.error('Oceanum AI: unexpected error', err);
               }
             } finally {
+              // However this ended -- answered, failed, or stopped -- the
+              // agent is no longer doing anything, so the last phase must not
+              // sit on screen claiming otherwise.
+              reportProgress(null);
               if (current === controller) {
                 current = null;
               }
