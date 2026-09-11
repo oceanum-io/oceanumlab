@@ -27,8 +27,15 @@ export class KernelHandoff {
    * @param _target The conversation's notebook, brought to the front -- and
    *   opened again first, if it was closed. Asked only when there is
    *   something to place, so an answer with no blocks leaves the tabs alone.
+   * @param _readFrom The panel the request read its selected cell from, if
+   *   any. A code answer replaces the selected cell only in that same panel:
+   *   one opened since has some other cell selected, and replacing it would
+   *   overwrite the user's work.
    */
-  constructor(private _target: () => Promise<NotebookPanel | null>) {}
+  constructor(
+    private _target: () => Promise<NotebookPanel | null>,
+    private _readFrom: () => NotebookPanel | null
+  ) {}
 
   /**
    * Place every block the response carries, in order, and return the message
@@ -69,7 +76,11 @@ export class KernelHandoff {
     // because inserting moves `activeCell`.
     const selected = notebook.activeCell;
     let replaceTarget =
-      options.replaceCodeCell && selected instanceof CodeCell ? selected : null;
+      options.replaceCodeCell &&
+      notebookPanel === this._readFrom() &&
+      selected instanceof CodeCell
+        ? selected
+        : null;
 
     for (const block of response.blocks) {
       if (options.signal?.aborted) {

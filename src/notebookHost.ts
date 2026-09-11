@@ -75,6 +75,11 @@ export function notebookHost(
     // Null when the file has been deleted, or has gone some other way: a new
     // notebook then takes over.
     reopen: async path => {
+      // Opened again by the user already: theirs, selection and all.
+      const open = tracker.find(panel => panel.context.path === path);
+      if (open) {
+        return loaded(Promise.resolve(open), waitMs);
+      }
       const panel = await loaded(
         app.commands.execute('docmanager:open', { path }),
         waitMs

@@ -17,7 +17,8 @@ interface IFakeContent {
 /** A notebook panel whose file has not been read yet; `load` reads it. */
 function unloaded(
   id: string,
-  cells = 3
+  cells = 3,
+  path = 'work/other.ipynb'
 ): { panel: NotebookPanel; content: IFakeContent; load: () => void } {
   let load: () => void = () => undefined;
   const ready = new Promise<void>(resolve => {
@@ -29,14 +30,14 @@ function unloaded(
   };
   const panel = Object.create(NotebookPanel.prototype) as NotebookPanel;
   Object.defineProperty(panel, 'id', { value: id });
-  Object.defineProperty(panel, 'context', { value: { ready } });
+  Object.defineProperty(panel, 'context', { value: { ready, path } });
   Object.defineProperty(panel, 'content', { value: content });
   return { panel, content, load };
 }
 
 function fakeLab(
   execute: (command: string, args: unknown) => Promise<unknown>,
-  tracked: unknown[] = []
+  tracked: NotebookPanel[] = []
 ) {
   const activated: string[] = [];
   const commands = { execute: jest.fn(execute) };
@@ -46,7 +47,10 @@ function fakeLab(
       activated.push(id);
     }
   };
-  const tracker = { has: (widget: unknown) => tracked.includes(widget) };
+  const tracker = {
+    has: (widget: unknown) => tracked.includes(widget as NotebookPanel),
+    find: (test: (panel: NotebookPanel) => boolean) => tracked.find(test)
+  };
   return {
     app: { commands, shell } as unknown as JupyterFrontEnd,
     tracker: tracker as unknown as INotebookTracker,
@@ -92,6 +96,20 @@ describe('notebookHost: re-opening', () => {
     await notebookHost(app, tracker).reopen('work/a.ipynb');
 
     expect(content.activeCellIndex).toBe(29);
+  });
+
+  it('uses a notebook the user has open already, leaving its selection as it is', async () => {
+    // They closed the pinned tab and opened the same file again themselves.
+    const { panel, content, load } = unloaded('theirs', 30, 'work/a.ipynb');
+    content.activeCellIndex = 7;
+    const { app, tracker, commands } = fakeLab(async () => null, [panel]);
+    load();
+
+    await expect(
+      notebookHost(app, tracker).reopen('work/a.ipynb')
+    ).resolves.toBe(panel);
+    expect(content.activeCellIndex).toBe(7);
+    expect(commands.execute).not.toHaveBeenCalled();
   });
 
   it('gives up on a notebook that never loads, rather than stalling the chat', async () => {

@@ -10,7 +10,7 @@ import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
-import { INotebookTracker } from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
@@ -165,8 +165,12 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         // notebook is read as it stands; a closed one is read from its file
         // rather than opened again, which is left for an answer that has
         // cells to place.
+        // The panel the current request read its selected cell from, if the
+        // notebook was open: a code answer may replace that cell only there.
+        let readFrom: NotebookPanel | null = null;
         const router = new ChatRouter(settings, async () => {
           const open = await pin.current();
+          readFrom = open;
           if (open) {
             return snapshotOf(open.content);
           }
@@ -186,7 +190,10 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         });
         // Asked only when an answer has blocks to place: brings the
         // conversation's notebook to the front, opening it again if closed.
-        const handoff = new KernelHandoff(() => pin.show());
+        const handoff = new KernelHandoff(
+          () => pin.show(),
+          () => readFrom
+        );
 
         // The run in flight, if any. Command args must be JSON, so a signal
         // cannot be passed in; Stop is a second command that reaches it here.
