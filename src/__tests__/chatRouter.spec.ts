@@ -1,26 +1,14 @@
 import { ChatRouter } from '../chatRouter';
-
-interface IFakeCell {
-  model: { type: string; sharedModel: { getSource: () => string } };
-}
-
-type RouterNotebook = Awaited<
-  ReturnType<ConstructorParameters<typeof ChatRouter>[1]>
->;
-
-const cell = (type: string, source: string): IFakeCell => ({
-  model: { type, sharedModel: { getSource: () => source } }
-});
-
-const notebook = (
-  cells: IFakeCell[],
-  activeCell: IFakeCell | null = null
-): RouterNotebook =>
-  ({ widgets: cells, activeCell }) as unknown as RouterNotebook;
+import type { INotebookSnapshot } from '../notebookContext';
 
 const settings = {
   get: () => ({ composite: 'a-token' })
 } as unknown as ConstructorParameters<typeof ChatRouter>[0];
+
+const snapshot = (
+  cells: INotebookSnapshot['cells'],
+  selected: INotebookSnapshot['selected'] = null
+): INotebookSnapshot => ({ cells, selected });
 
 let sent: Record<string, unknown> | undefined;
 
@@ -39,14 +27,14 @@ beforeEach(() => {
 });
 
 describe('ChatRouter: the notebook sent with a request', () => {
-  it('is the conversation notebook, code and markdown, raw cells left out', async () => {
-    const pinned = notebook([
-      cell('code', 'x = 1'),
-      cell('markdown', '## Notes'),
-      cell('raw', 'not python, not prose'),
-      cell('code', 'y = x')
-    ]);
-    const router = new ChatRouter(settings, async () => pinned);
+  it('is the conversation notebook, code and markdown', async () => {
+    const router = new ChatRouter(settings, async () =>
+      snapshot([
+        { kind: 'code', source: 'x = 1' },
+        { kind: 'markdown', source: '## Notes' },
+        { kind: 'code', source: 'y = x' }
+      ])
+    );
 
     await router.route('what does this do?');
 
@@ -58,9 +46,11 @@ describe('ChatRouter: the notebook sent with a request', () => {
   });
 
   it('carries the selected cell of that notebook, which a code answer may replace', async () => {
-    const selected = cell('code', 'df.head()');
     const router = new ChatRouter(settings, async () =>
-      notebook([selected], selected)
+      snapshot([{ kind: 'code', source: 'df.head()' }], {
+        source: 'df.head()',
+        isCode: true
+      })
     );
 
     const result = await router.route('fix this');
@@ -70,13 +60,13 @@ describe('ChatRouter: the notebook sent with a request', () => {
   });
 
   it('asks for the notebook on every request, so it follows the conversation', async () => {
-    let current = notebook([cell('code', 'a = 1')]);
+    let current = snapshot([{ kind: 'code', source: 'a = 1' }]);
     const router = new ChatRouter(settings, async () => current);
 
     await router.route('one');
     expect(sent?.notebookCells).toEqual(['a = 1']);
 
-    current = notebook([cell('code', 'b = 2')]);
+    current = snapshot([{ kind: 'code', source: 'b = 2' }]);
     await router.route('two');
     expect(sent?.notebookCells).toEqual(['b = 2']);
   });
@@ -91,11 +81,11 @@ describe('ChatRouter: the notebook sent with a request', () => {
     expect(sent?.context).toBeUndefined();
   });
 
-  it('still sends the question when the notebook cannot be had', async () => {
-    // Context is best-effort; a notebook that could not be opened must not
+  it('still sends the question when the notebook cannot be read', async () => {
+    // Context is best-effort; a notebook that could not be read must not
     // cost the user the answer.
     const router = new ChatRouter(settings, async () => {
-      throw new Error('could not open');
+      throw new Error('could not read');
     });
 
     await router.route('hello');

@@ -10,12 +10,14 @@ import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
-import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
+import { INotebookTracker } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { ConversationPin } from './conversationPin';
+import { snapshotFromIpynb, snapshotOf } from './notebookContext';
+import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
 import { MAX_OBSERVE_ROUNDS } from './constants';
@@ -135,46 +137,6 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 };
 
 /**
- * A new Python 3 notebook, made the active tab.
- *
- * `notebook:create-new` opens what it creates and, in JupyterLab 4, returns
- * the panel; failing that, the panel is the next one the tracker gains -- not
- * the tracker's current notebook, which would be some older one if creating
- * had quietly failed.
- */
-async function createNotebook(
-  app: JupyterFrontEnd,
-  tracker: INotebookTracker
-): Promise<NotebookPanel | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let onAdded:
-    | ((sender: INotebookTracker, panel: NotebookPanel) => void)
-    | undefined;
-  const added = new Promise<NotebookPanel | null>(resolve => {
-    timer = setTimeout(() => resolve(null), 5000);
-    onAdded = (_, panel) => resolve(panel);
-    tracker.widgetAdded.connect(onAdded);
-  });
-  try {
-    const created = await app.commands.execute('notebook:create-new', {
-      kernelName: 'python3'
-    });
-    const panel = created instanceof NotebookPanel ? created : await added;
-    if (panel) {
-      app.shell.activateById(panel.id);
-    }
-    return panel;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-    if (onAdded) {
-      tracker.widgetAdded.disconnect(onAdded);
-    }
-  }
-}
-
-/**
  * Second plugin: Oceanum AI chat integration.
  * Wires ChatRouter → KernelHandoff and exposes the
  * `oceanum-ai:submit-prompt` command.
@@ -197,34 +159,31 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
       .then(settings => {
         // The notebook the current conversation lives in: what the agent is
         // shown, and where its answers go.
-        const pin = new ConversationPin({
-          // `app.shell` tracks only main-area tabs, so its current widget is
-          // the active tab even while focus is in this sidebar.
-          activeTab: () => {
-            const widget = app.shell.currentWidget;
-            return widget && notebookTracker.has(widget)
-              ? (widget as NotebookPanel)
-              : null;
-          },
-          create: () => createNotebook(app, notebookTracker),
-          reopen: async path => {
-            try {
-              const widget = await app.commands.execute('docmanager:open', {
-                path
-              });
-              return widget instanceof NotebookPanel ? widget : null;
-            } catch {
-              // Deleted, or renamed while closed: a new notebook takes over.
-              return null;
-            }
-          },
-          activate: panel => app.shell.activateById(panel.id)
-        });
+        const pin = new ConversationPin(notebookHost(app, notebookTracker));
 
-        const router = new ChatRouter(
-          settings,
-          async () => (await pin.notebook())?.content ?? null
-        );
+        // What a request carries from the conversation's notebook. An open
+        // notebook is read as it stands; a closed one is read from its file
+        // rather than opened again, which is left for an answer that has
+        // cells to place.
+        const router = new ChatRouter(settings, async () => {
+          const open = await pin.current();
+          if (open) {
+            return snapshotOf(open.content);
+          }
+          const path = pin.path();
+          if (!path) {
+            return null;
+          }
+          try {
+            const file = await app.serviceManager.contents.get(path, {
+              content: true
+            });
+            return snapshotFromIpynb(file.content);
+          } catch {
+            // Gone: an answer's cells will go into a new notebook instead.
+            return null;
+          }
+        });
         // Asked only when an answer has blocks to place: brings the
         // conversation's notebook to the front, opening it again if closed.
         const handoff = new KernelHandoff(() => pin.show());

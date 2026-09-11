@@ -608,8 +608,8 @@ function AIChatPanel({
     setLoading(true);
 
     try {
-      // Starts the conversation if this is its first message, and reports the
-      // pin either way -- it drops to "no notebook" once that one is closed.
+      // Starts the conversation if this is its first message, and reports
+      // its notebook's name either way.
       const pinned = await commands.execute('oceanum-ai:chat-context');
       if (mine !== conversation.current) {
         return;
@@ -624,6 +624,13 @@ function AIChatPanel({
       if (mine !== conversation.current) {
         return;
       }
+      // Placing the answer can have put it in a new notebook (the old one was
+      // deleted), so the line is read again rather than left as it was.
+      const after = await commands.execute('oceanum-ai:chat-context');
+      if (mine !== conversation.current) {
+        return;
+      }
+      setContext((after as string | null) ?? null);
       const explanation = (result as string) ?? '';
       setMessages(prev => [
         ...prev,

@@ -1,9 +1,18 @@
+import type { Notebook } from '@jupyterlab/notebook';
+
 /**
  * A notebook cell reduced to what the chat context needs.
  */
 export interface IContextCell {
   kind: 'code' | 'markdown';
   source: string;
+}
+
+/** What a request carries from the conversation's notebook. */
+export interface INotebookSnapshot {
+  cells: IContextCell[];
+  /** The selected cell, which a code answer may replace. None when closed. */
+  selected: { source: string; isCode: boolean } | null;
 }
 
 // Mirrors oceanum-ai's app/config.py. Past either limit the server rejects the
@@ -21,6 +30,59 @@ export const MAX_CELLS_BYTES = 1024 * 1024;
 // up to the first space, bracket or quote.
 const DATA_URI =
   /data:[\w.+-]+\/[\w.+-]+(?:;[\w.+-]+(?:=[\w.+-]+)?)*,[^\s)"']+/g;
+
+/** An open notebook's code and markdown cells, and its selected cell. */
+export function snapshotOf(notebook: Notebook): INotebookSnapshot {
+  const cells: IContextCell[] = [];
+  for (const cell of notebook.widgets) {
+    const type = cell.model.type;
+    if (type === 'code' || type === 'markdown') {
+      cells.push({ kind: type, source: cell.model.sharedModel.getSource() });
+    }
+  }
+  const active = notebook.activeCell;
+  return {
+    cells,
+    selected: active
+      ? {
+          source: active.model.sharedModel.getSource(),
+          isCode: active.model.type === 'code'
+        }
+      : null
+  };
+}
+
+/**
+ * A closed notebook's cells, read from its file.
+ *
+ * Read rather than opened again: re-opening the tab is for an answer with
+ * cells to place, not for asking a question. A closed notebook has no
+ * selected cell. Anything unexpected in the file reads as no cells rather
+ * than an error -- context is best-effort.
+ */
+export function snapshotFromIpynb(content: unknown): INotebookSnapshot {
+  const raw = (content as { cells?: unknown } | null)?.cells;
+  const cells: IContextCell[] = [];
+  if (Array.isArray(raw)) {
+    for (const cell of raw) {
+      const { cell_type: type, source } = (cell ?? {}) as {
+        cell_type?: unknown;
+        source?: unknown;
+      };
+      if (type !== 'code' && type !== 'markdown') {
+        continue;
+      }
+      // nbformat allows the source as one string or as a list of lines.
+      const text = Array.isArray(source)
+        ? source.join('')
+        : typeof source === 'string'
+          ? source
+          : '';
+      cells.push({ kind: type, source: text });
+    }
+  }
+  return { cells, selected: null };
+}
 
 /**
  * The notebook as `notebookCells`: every non-empty code and markdown cell, in

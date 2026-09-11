@@ -1,8 +1,7 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import type { Notebook } from '@jupyterlab/notebook';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
 import type { ObservedRun } from './notebookRun';
-import type { IContextCell } from './notebookContext';
+import type { INotebookSnapshot } from './notebookContext';
 import { formatNotebookCells } from './notebookContext';
 
 /** One thing the backend asks us to place in the notebook. */
@@ -75,13 +74,14 @@ function asOceanumResponse(data: unknown): OceanumResponse {
 
 export class ChatRouter {
   /**
-   * @param _notebook The conversation's notebook -- the one its answers are
-   *   placed in -- or null if there is none. Asked on every request, so it
-   *   follows the conversation rather than whichever tab happens to be active.
+   * @param _notebook What the conversation's notebook holds -- the one its
+   *   answers are placed in -- or null if there is nothing to send. Asked on
+   *   every request, so it follows the conversation rather than whichever tab
+   *   happens to be active.
    */
   constructor(
     private _settings: ISettingRegistry.ISettings,
-    private _notebook: () => Promise<Notebook | null>
+    private _notebook: () => Promise<INotebookSnapshot | null>
   ) {}
 
   async route(
@@ -124,33 +124,19 @@ export class ChatRouter {
     prompt: string,
     chatHistory: ChatMessage[]
   ): Promise<{ payload: ChatPayload; isCodeCell: boolean; context: string }> {
-    // Get active cell source as context (best-effort)
     let context = '';
     let isCodeCell = false;
     let notebookCells: string[] = [];
 
     try {
-      const notebook = await this._notebook();
-      if (notebook) {
-        // Code and markdown cells, without outputs.
-        const cells: IContextCell[] = [];
-        for (const cell of notebook.widgets) {
-          const type = cell.model.type;
-          if (type === 'code' || type === 'markdown') {
-            cells.push({
-              kind: type,
-              source: cell.model.sharedModel.getSource()
-            });
-          }
-        }
-        notebookCells = formatNotebookCells(cells);
-
+      const snapshot = await this._notebook();
+      if (snapshot) {
+        notebookCells = formatNotebookCells(snapshot.cells);
         // Answers are placed in this same notebook, so its selected cell is
         // the one a code answer may replace.
-        const activeCell = notebook.activeCell;
-        if (activeCell) {
-          context = activeCell.model.sharedModel.getSource();
-          isCodeCell = activeCell.model.type === 'code';
+        if (snapshot.selected) {
+          context = snapshot.selected.source;
+          isCodeCell = snapshot.selected.isCode;
         }
       }
     } catch {
