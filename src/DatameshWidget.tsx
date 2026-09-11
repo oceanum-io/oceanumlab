@@ -579,11 +579,23 @@ function AIChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // The notebook this conversation is pinned to: undefined until it starts,
+  // null when it has none. See 'oceanum-ai:chat-context' in index.ts.
+  const [context, setContext] = React.useState<string | null | undefined>(
+    undefined
+  );
+  // Bumped by New chat. A request keeps the value it started with, and drops
+  // its result once the value has moved on: the run New chat stopped resolves
+  // AFTER the reset -- with "Stopped." or a late answer -- and must neither
+  // land in the new conversation nor end `loading` under a newer request.
+  const conversation = React.useRef(0);
+
   const handleSubmit = async (): Promise<void> => {
     const prompt = input.trim();
     if (!prompt || loading) {
       return;
     }
+    const mine = conversation.current;
 
     // Add to history
     setHistory(prev => [...prev, prompt]);
@@ -596,21 +608,70 @@ function AIChatPanel({
     setLoading(true);
 
     try {
+      // Starts the conversation if this is its first message, and reports
+      // its notebook's name either way.
+      const pinned = await commands.execute('oceanum-ai:chat-context');
+      if (mine !== conversation.current) {
+        return;
+      }
+      setContext((pinned as string | null) ?? null);
       // Pass current chat history (before adding the new user message)
       // The user message was already added to state, so we use the messages array directly
       const result = await commands.execute('oceanum-ai:submit-prompt', {
         prompt,
         chatHistory: messages as unknown as ReadonlyJSONArray
       });
+      if (mine !== conversation.current) {
+        return;
+      }
+      // Placing the answer can have put it in a new notebook (the old one was
+      // deleted), so the line is read again rather than left as it was.
+      const after = await commands.execute('oceanum-ai:chat-context');
+      if (mine !== conversation.current) {
+        return;
+      }
+      setContext((after as string | null) ?? null);
       const explanation = (result as string) ?? '';
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: explanation }
       ]);
     } catch (err: any) {
-      setError(err?.message ?? 'An error occurred');
+      if (mine === conversation.current) {
+        setError(err?.message ?? 'An error occurred');
+      }
     } finally {
-      setLoading(false);
+      if (mine === conversation.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Clear the conversation and start another, pinned to whichever notebook is
+  // the active tab now. The prompt history (up/down arrow) is kept: it is
+  // input recall, not conversation.
+  const handleNewChat = async (): Promise<void> => {
+    conversation.current += 1;
+    const mine = conversation.current;
+    setMessages([]);
+    setInput('');
+    setError(null);
+    setLoading(false);
+    setHistoryIndex(-1);
+    setTempInput('');
+    try {
+      const pinned = await commands.execute('oceanum-ai:new-chat');
+      if (mine === conversation.current) {
+        setContext((pinned as string | null) ?? null);
+      }
+    } catch (err: any) {
+      // The chat commands register once settings have loaded, so a click
+      // before that has nothing to reach. Say so, rather than leave the old
+      // conversation's "Context:" line under a cleared chat.
+      if (mine === conversation.current) {
+        setContext(undefined);
+        setError(err?.message ?? 'Oceanum AI is not ready yet.');
+      }
     }
   };
 
@@ -658,15 +719,27 @@ function AIChatPanel({
   return (
     <div className="oceanum-ai-chat">
       <div className="oceanum-ai-chat-header">
-        <span>Oceanum AI</span>
+        <span className="oceanum-ai-chat-title">Oceanum AI</span>
+        <button
+          className="jp-mod-styled oceanum-ai-chat-new"
+          onClick={() => void handleNewChat()}
+          title="Clear this conversation and start a new one, with the active notebook as its context"
+        >
+          New chat
+        </button>
       </div>
+      {context !== undefined && (
+        <div className="oceanum-ai-chat-context" title={context ?? undefined}>
+          {context === null ? 'No notebook in context' : `Context: ${context}`}
+        </div>
+      )}
       <div className="oceanum-ai-chat-messages">
         {messages.length === 0 && (
           <div className="oceanum-text-empty">
             Ask Oceanum AI to query and analyse data from Datamesh.
             <br></br>
-            Generated code will be automatically inserted into your notebook in
-            the curretly selected cell.
+            Answers go into this chat&apos;s notebook: the one in the active tab
+            when the chat starts, or a new one.
           </div>
         )}
         {messages.map((msg, i) => (

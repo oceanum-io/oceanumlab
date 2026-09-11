@@ -10,11 +10,14 @@ import { find } from '@lumino/algorithm';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
-import { INotebookTracker } from '@jupyterlab/notebook';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { ConversationPin } from './conversationPin';
+import { snapshotFromIpynb, snapshotOf } from './notebookContext';
+import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
 import { MAX_OBSERVE_ROUNDS } from './constants';
@@ -154,8 +157,43 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
     settingRegistry
       .load(SETTINGS_ID)
       .then(settings => {
-        const router = new ChatRouter(settings, notebookTracker);
-        const handoff = new KernelHandoff(notebookTracker, app.commands);
+        // The notebook the current conversation lives in: what the agent is
+        // shown, and where its answers go.
+        const pin = new ConversationPin(notebookHost(app, notebookTracker));
+
+        // What a request carries from the conversation's notebook. An open
+        // notebook is read as it stands; a closed one is read from its file
+        // rather than opened again, which is left for an answer that has
+        // cells to place.
+        // The panel the current request read its selected cell from, if the
+        // notebook was open: a code answer may replace that cell only there.
+        let readFrom: NotebookPanel | null = null;
+        const router = new ChatRouter(settings, async () => {
+          const open = await pin.current();
+          readFrom = open;
+          if (open) {
+            return snapshotOf(open.content);
+          }
+          const path = pin.path();
+          if (!path) {
+            return null;
+          }
+          try {
+            const file = await app.serviceManager.contents.get(path, {
+              content: true
+            });
+            return snapshotFromIpynb(file.content);
+          } catch {
+            // Gone: an answer's cells will go into a new notebook instead.
+            return null;
+          }
+        });
+        // Asked only when an answer has blocks to place: brings the
+        // conversation's notebook to the front, opening it again if closed.
+        const handoff = new KernelHandoff(
+          () => pin.show(),
+          () => readFrom
+        );
 
         // The run in flight, if any. Command args must be JSON, so a signal
         // cannot be passed in; Stop is a second command that reaches it here.
@@ -168,6 +206,24 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
           }
         });
 
+        app.commands.addCommand('oceanum-ai:new-chat', {
+          label: 'Start a new Oceanum AI chat',
+          execute: () => {
+            // The run in flight belongs to the conversation being thrown away:
+            // stop it placing anything more. The panel discards its result.
+            current?.abort();
+            return pin.start();
+          }
+        });
+
+        app.commands.addCommand('oceanum-ai:chat-context', {
+          label: 'The notebook the current Oceanum AI chat is about',
+          // Starts the conversation if nothing has -- so the first message of
+          // one nobody started with New chat pins the same way -- and reports
+          // its notebook either way.
+          execute: () => pin.ensure()
+        });
+
         app.commands.addCommand('oceanum-ai:submit-prompt', {
           label: 'Submit prompt to Oceanum AI',
           execute: async (args: Record<string, unknown>) => {
@@ -176,6 +232,9 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             if (!prompt) {
               return;
             }
+            // A caller that skipped 'oceanum-ai:chat-context' still gets a
+            // conversation pinned the same way.
+            await pin.ensure();
             // Read per prompt, not once at load, so a settings change applies
             // to the next question without a reload.
             const autoRunCode = settings.get('autoRunCode')
