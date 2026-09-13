@@ -51,6 +51,24 @@ export function reportProgress(progress: Progress | null): void {
 }
 
 /**
+ * A reporter for one run: it publishes only while `isCurrent()` holds.
+ *
+ * A run that New chat or a newer prompt replaced is aborted, but it can take a
+ * while to unwind -- a cell that ignores the interrupt keeps it in its handoff
+ * -- and whatever it reports on the way out, a phase or its "no longer
+ * working", would land on the new run's progress line.
+ */
+export function reporterFor(
+  isCurrent: () => boolean
+): (progress: Progress | null) => void {
+  return progress => {
+    if (isCurrent()) {
+      reportProgress(progress);
+    }
+  };
+}
+
+/**
  * What each phase is, in the user's terms.
  *
  * An unlisted phase or tool falls back to something generic rather than

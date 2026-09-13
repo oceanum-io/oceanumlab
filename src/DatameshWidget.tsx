@@ -612,6 +612,7 @@ function AIChatPanel({
     setInput('');
     setError(null);
     setMessages(prev => [...prev, { role: 'user', content: prompt }]);
+    setProgress(null);
     setLoading(true);
 
     try {
@@ -664,6 +665,8 @@ function AIChatPanel({
     setInput('');
     setError(null);
     setLoading(false);
+    // The old run's last phase belongs to the conversation thrown away.
+    setProgress(null);
     setHistoryIndex(-1);
     setTempInput('');
     try {

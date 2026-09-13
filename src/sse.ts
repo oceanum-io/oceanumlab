@@ -68,8 +68,10 @@ export async function* readSse(
       yield* drain();
     }
   } finally {
-    // Releases the underlying connection whether the consumer finished, threw,
-    // or stopped early -- a `break` in a for-await runs this.
+    // Releases the reader's lock whether the consumer finished, threw, or
+    // stopped early -- a `break` in a for-await runs this. It does not cancel
+    // the body: the backend ends the stream after `done` or `error`, and Stop's
+    // abort closes the connection itself.
     reader.releaseLock();
   }
 }

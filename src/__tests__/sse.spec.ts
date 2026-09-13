@@ -1,5 +1,10 @@
 import { readSse } from '../sse';
-import { describeProgress } from '../progress';
+import {
+  describeProgress,
+  onProgress,
+  reporterFor,
+  type Progress
+} from '../progress';
 
 /**
  * A stand-in for the browser's ReadableStream, because jsdom has none.
@@ -217,5 +222,66 @@ describe('line endings other than LF', () => {
 
     expect(events[0].data).not.toContain('\r');
     expect(() => JSON.parse(events[0].data)).not.toThrow();
+  });
+});
+
+describe('Stop while a read is in flight', () => {
+  it('ends the read with the abort, having yielded what arrived first', async () => {
+    // The already-aborted case above is the easy one. The real Stop lands while
+    // a read is pending, and fetch fails that read.
+    const controller = new AbortController();
+    let reads = 0;
+    const body = {
+      getReader: () => ({
+        read: (): Promise<{ done: boolean; value?: Uint8Array }> => {
+          reads += 1;
+          if (reads === 1) {
+            return Promise.resolve({
+              done: false,
+              value: new TextEncoder().encode(
+                'event: status\ndata: {"phase":"generating"}\n\n'
+              )
+            });
+          }
+          return new Promise((_ok, fail) => {
+            controller.signal.addEventListener('abort', () =>
+              fail(new DOMException('Aborted', 'AbortError'))
+            );
+          });
+        },
+        releaseLock: (): void => undefined
+      })
+    } as unknown as ReadableStream<Uint8Array>;
+
+    const seen: string[] = [];
+    const reading = (async () => {
+      for await (const event of readSse(body, controller.signal)) {
+        seen.push(event.event);
+      }
+    })();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    controller.abort();
+
+    await expect(reading).rejects.toMatchObject({ name: 'AbortError' });
+    expect(seen).toEqual(['status']);
+  });
+});
+
+describe('reporterFor', () => {
+  it('speaks only while its run is the current one', () => {
+    // A replaced run can take a while to unwind; nothing it reports on the way
+    // out may land on the new run's progress line -- not even its "done".
+    let current = true;
+    const heard: Array<Progress | null> = [];
+    const unsubscribe = onProgress(progress => heard.push(progress));
+    const report = reporterFor(() => current);
+
+    report({ phase: 'generating' });
+    current = false;
+    report({ phase: 'running' });
+    report(null);
+    unsubscribe();
+
+    expect(heard).toEqual([{ phase: 'generating' }]);
   });
 });
