@@ -111,7 +111,7 @@ export class ConversationPin {
     if (live) {
       return live.title.label;
     }
-    return this._path ? this._path.split('/').pop() ?? this._path : null;
+    return this._path ? (this._path.split('/').pop() ?? this._path) : null;
   }
 
   private _live(): NotebookPanel | null {
