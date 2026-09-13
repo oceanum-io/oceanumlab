@@ -12,10 +12,14 @@
   padding: 5px;
 }
 
+/* The sidebar panel: a flex column. */
 .datamesh-connect {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
   color: var(--jp-ui-font-color1);
   background: var(--jp-layout-color1);
-  height: 100%;
 }
 
 .datamesh-connect a {
@@ -79,7 +83,6 @@
   letter-spacing: 1px;
   padding: 8px 8px 8px 12px;
   margin: 0;
-  margin-left: 0;
   margin-bottom: 10px;
   font-size: var(--jp-ui-font-size1);
 }
@@ -99,8 +102,7 @@
 }
 
 .datasource-item-details {
-  overflow-x: auto;
-  overflow-y: auto;
+  overflow: auto;
   display: block;
   padding: 5px;
   margin: 5px;
@@ -160,14 +162,6 @@
   padding: 2px;
 }
 
-/* Layout: make the sidebar panel a flex column */
-.datamesh-connect {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
 .datamesh-connect-workspace {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -179,6 +173,7 @@
   background: var(--jp-border-color2);
   margin: 0;
 }
+
 .oceanum-text-empty {
   color: var(--jp-ui-font-color2);
   font-size: var(--jp-ui-font-size0);
@@ -200,7 +195,7 @@
 .oceanum-token-config {
   color: var(--jp-ui-font-color2);
   font-size: var(--jp-ui-font-size0);
-  padding: 12px 12px;
+  padding: 12px;
   background: var(--jp-layout-color2);
   border-top: 1px solid var(--jp-border-color2);
 }
@@ -271,8 +266,6 @@
   gap: 6px;
 }
 
-
-
 .oceanum-ai-chat-message {
   display: flex;
   flex-direction: column;
@@ -297,7 +290,7 @@
   font-size: var(--jp-ui-font-size1);
   color: var(--jp-ui-font-color1);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   background: var(--jp-layout-color2);
   padding: 6px 8px;
   border-radius: 4px;
@@ -320,7 +313,7 @@
   color: var(--jp-error-color1);
   font-size: var(--jp-ui-font-size0);
   padding: 4px 8px;
-  background: var(--jp-error-color3, rgba(244,67,54,0.1));
+  background: var(--jp-error-color3, rgb(244 67 54 / 10%));
   border-radius: 4px;
 }
 
@@ -336,7 +329,7 @@
 }
 
 .oceanum-ai-chat-disabled p {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px;
 }
 
 .oceanum-ai-chat-disabled a {
@@ -404,7 +397,7 @@
 }
 
 .oceanum-ai-markdown p {
-  margin: 0 0 0.5em 0;
+  margin: 0 0 0.5em;
 }
 
 .oceanum-ai-markdown p:last-child {
@@ -415,7 +408,7 @@
 .oceanum-ai-markdown h2,
 .oceanum-ai-markdown h3,
 .oceanum-ai-markdown h4 {
-  margin: 0.5em 0 0.25em 0;
+  margin: 0.5em 0 0.25em;
   font-weight: 600;
 }
 

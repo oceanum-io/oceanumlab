@@ -30,10 +30,10 @@ export const DatasourceItem: React.FC<IDatasourceItemProps> = ({
     setExpandedValue(!expanded);
   };
 
-  const startDrag=(e:React.MouseEvent<HTMLSpanElement, MouseEvent>)=>{
+  const startDrag = (e: React.MouseEvent<HTMLSpanElement, MouseEvent>) => {
     setIsDragging(true);
-    onMouseDown(e, datasource)
-  }
+    onMouseDown(e, datasource);
+  };
 
   return (
     <div className={expanded ? 'expanded' : ''}>

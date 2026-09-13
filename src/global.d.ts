@@ -1,5 +1,5 @@
 declare global {
-    var datameshToken: string;
-    var injectToken: boolean;
+  var datameshToken: string;
+  var injectToken: boolean;
 }
-export { };
+export {};

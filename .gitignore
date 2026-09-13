@@ -130,3 +130,6 @@ _temp_extension
 pypi.conf
 
 *.ipynb
+
+# Written by the jest preset's jest-junit reporter on every test run
+junit.xml

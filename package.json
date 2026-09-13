@@ -42,7 +42,7 @@
         "clean:labextension": "rimraf oceanumlab/labextension oceanumlab/_version.py",
         "clean:all": "jlpm clean:lib && jlpm clean:labextension && jlpm clean:lintcache",
         "eslint": "jlpm eslint:check --fix",
-        "eslint:check": "eslint . --cache --ext .ts,.tsx",
+        "eslint:check": "ESLINT_USE_FLAT_CONFIG=false eslint . --cache --ext .ts,.tsx",
         "install:extension": "jlpm build",
         "lint": "jlpm stylelint && jlpm prettier && jlpm eslint",
         "lint:check": "jlpm stylelint:check && jlpm prettier:check && jlpm eslint:check",
@@ -140,8 +140,10 @@
         ],
         "rules": {
             "csstree/validator": true,
+            "custom-property-pattern": null,
+            "no-descending-specificity": null,
             "property-no-vendor-prefix": null,
-            "selector-class-pattern": "^([a-z][A-z\\d]*)(-[A-z\\d]+)*$",
+            "selector-class-pattern": "^([a-z][A-z\\d]*)(-{1,2}[A-z\\d]+)*$",
             "selector-no-vendor-prefix": null,
             "value-no-vendor-prefix": null
         }
