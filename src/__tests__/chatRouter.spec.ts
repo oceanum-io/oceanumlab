@@ -237,6 +237,41 @@ describe('ChatRouter: the streamed answer', () => {
     ).rejects.toThrow('The response ended before it was complete.');
   });
 
+  it('reports a connection lost mid-answer as an error, not silence', async () => {
+    // A redeploy or a network drop fails the read in flight with a bare
+    // TypeError. Unwrapped, it reached the command as unexpected, and the chat
+    // showed an empty answer.
+    let reads = 0;
+    answering(() => ({
+      ...streamed([]),
+      body: {
+        getReader: () => ({
+          read: (): Promise<{ done: boolean; value?: Uint8Array }> => {
+            reads += 1;
+            return reads === 1
+              ? Promise.resolve({
+                  done: false,
+                  value: new TextEncoder().encode(
+                    frame('status', { phase: 'generating' })
+                  )
+                })
+              : Promise.reject(new TypeError('terminated'));
+          },
+          releaseLock: (): void => undefined
+        })
+      }
+    }));
+    const router = new ChatRouter(settings, noNotebook);
+
+    await expect(
+      router.route('hi', [], undefined, () => undefined)
+    ).rejects.toMatchObject({
+      name: 'ChatRouterError',
+      message:
+        'The connection to Oceanum AI was lost before the response was complete.'
+    });
+  });
+
   it('streams the observe round too', async () => {
     answering(() =>
       streamed([

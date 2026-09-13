@@ -99,9 +99,23 @@ export function describeProgress(progress: Progress | null): string {
     return 'Thinking…';
   }
   if (progress.phase === 'tool') {
-    return progress.tool
-      ? TOOL_LABELS[progress.tool] ?? 'Looking something up…'
-      : 'Looking something up…';
+    return labelFor(TOOL_LABELS, progress.tool) ?? 'Looking something up…';
   }
-  return PHASE_LABELS[progress.phase] ?? 'Working…';
+  return labelFor(PHASE_LABELS, progress.phase) ?? 'Working…';
+}
+
+/**
+ * The label `labels` itself gives `name`, if any. Only its own entries: the
+ * name comes off the stream -- a tool name is whatever the model called -- and
+ * `__proto__` or `toString` must not reach into Object.prototype. That hands
+ * React an object or a function to render, and an object breaks the panel.
+ */
+function labelFor(
+  labels: Record<string, string>,
+  name: string | undefined
+): string | undefined {
+  return name !== undefined &&
+    Object.prototype.hasOwnProperty.call(labels, name)
+    ? labels[name]
+    : undefined;
 }

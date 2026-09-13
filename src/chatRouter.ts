@@ -255,25 +255,39 @@ export class ChatRouter {
     }
 
     let answer: unknown;
-    for await (const event of readSse(response.body, signal)) {
-      if (event.event === 'status') {
-        const data = parseJson<Progress>(event.data);
-        if (data?.phase) {
-          onProgress(data);
+    try {
+      for await (const event of readSse(response.body, signal)) {
+        if (event.event === 'status') {
+          const data = parseJson<Progress>(event.data);
+          if (data?.phase) {
+            onProgress(data);
+          }
+        } else if (event.event === 'done') {
+          answer = parseJson<unknown>(event.data);
+        } else if (event.event === 'error') {
+          const data = parseJson<{ detail?: string; status_code?: number }>(
+            event.data
+          );
+          // The status was 200 before this could happen, so the failure travels
+          // in the frame and there was nothing for the check above to throw on.
+          throw new ChatRouterError(
+            `Backend error: ${data?.detail ?? 'the request failed'}`,
+            data?.status_code
+          );
         }
-      } else if (event.event === 'done') {
-        answer = parseJson<unknown>(event.data);
-      } else if (event.event === 'error') {
-        const data = parseJson<{ detail?: string; status_code?: number }>(
-          event.data
-        );
-        // The status was 200 before this could happen, so the failure travels
-        // in the frame and there was nothing for the check above to throw on.
-        throw new ChatRouterError(
-          `Backend error: ${data?.detail ?? 'the request failed'}`,
-          data?.status_code
-        );
       }
+    } catch (err) {
+      // Stop fails the read with an AbortError, which the caller reports as
+      // Stop, and an `error` event is already the chat's error. Anything else
+      // is the connection going away mid-answer -- a redeploy, the network --
+      // which fetch reports as a bare TypeError ("terminated"). Left as it
+      // was, it reached the command as unexpected and the chat showed nothing.
+      if (signal?.aborted || err instanceof ChatRouterError) {
+        throw err;
+      }
+      throw new ChatRouterError(
+        'The connection to Oceanum AI was lost before the response was complete.'
+      );
     }
 
     if (answer === undefined) {

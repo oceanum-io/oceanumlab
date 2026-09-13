@@ -142,6 +142,23 @@ describe('describeProgress', () => {
   it('reads a new phase as progress rather than as a blank', () => {
     expect(describeProgress({ phase: 'something_new' })).toBe('Working…');
   });
+
+  it('gives a name that is also a built-in property the generic label', () => {
+    // Names come off the stream. `__proto__` must not come back as
+    // Object.prototype -- React cannot render an object -- nor `toString` as a
+    // function.
+    for (const name of [
+      '__proto__',
+      'toString',
+      'constructor',
+      'hasOwnProperty'
+    ]) {
+      expect(describeProgress({ phase: 'tool', tool: name })).toBe(
+        'Looking something up…'
+      );
+      expect(describeProgress({ phase: name })).toBe('Working…');
+    }
+  });
 });
 
 describe('phases the client reports about itself', () => {
