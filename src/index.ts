@@ -15,6 +15,7 @@ import { DatameshConnectWidget } from './DatameshWidget';
 import { DatameshUI } from './DatameshUI';
 import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
+import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
@@ -211,7 +212,11 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
           execute: () => {
             // The run in flight belongs to the conversation being thrown away:
             // stop it placing anything more. The panel discards its result.
-            current?.abort();
+            // It stops being the current run now, not once it has finished
+            // unwinding, so it cannot report progress into the new chat.
+            const run = current;
+            current = null;
+            run?.abort();
             return pin.start();
           }
         });
@@ -244,15 +249,42 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
             current?.abort();
             const controller = new AbortController();
             current = controller;
+            // This run's progress, heard only while it is the current run.
+            const report = reporterFor(() => current === controller);
             try {
+              // Cleared in the `finally` below however this ends, so the last
+              // phase does not sit on screen after the answer has arrived --
+              // or after Stop.
               return await runChatLoop(
                 prompt,
                 chatHistory,
                 {
-                  route: (p, h, signal) => router.route(p, h, signal),
-                  observe: (p, h, runs, signal) =>
-                    router.observe(p, h, runs, signal),
-                  place: (response, opts) => handoff.inject(response, opts)
+                  route: (p, h, signal) => router.route(p, h, signal, report),
+                  observe: (p, h, runs, signal) => {
+                    // The agent's turn again: the notebook's "Running the
+                    // code…" must not stay up while the agent reads what the
+                    // code printed.
+                    report({ phase: 'interpreting' });
+                    return router.observe(p, h, runs, signal, report);
+                  },
+                  place: (response, opts) => {
+                    // The notebook's turn, not the agent's. Without this the
+                    // last phase the AGENT reported stays on screen while a
+                    // cell is running, so the user is told the agent is
+                    // reading dataset details when what is actually happening
+                    // is their own code executing. That is a worse claim than
+                    // the "Thinking…" it replaced, which was vague rather than
+                    // wrong. And "running" only when there is code that will.
+                    if (response.blocks.length > 0) {
+                      const runsCode =
+                        autoRunCode &&
+                        response.blocks.some(
+                          block => block.type === 'code' && block.content.trim()
+                        );
+                      report({ phase: runsCode ? 'running' : 'placing' });
+                    }
+                    return handoff.inject(response, opts);
+                  }
                 },
                 {
                   autoRunCode,
@@ -273,6 +305,10 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
                 console.error('Oceanum AI: unexpected error', err);
               }
             } finally {
+              // However this ended -- answered, failed, or stopped -- the
+              // agent is no longer doing anything, so the last phase must not
+              // sit on screen claiming otherwise.
+              report(null);
               if (current === controller) {
                 current = null;
               }
