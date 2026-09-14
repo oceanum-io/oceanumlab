@@ -31,7 +31,7 @@ pip uninstall oceanumlab
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
+Note: You will need NodeJS 22.12 or later (or 20.19+) to build the extension package.
 
 The `jlpm` command is JupyterLab's pinned version of
 [yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use

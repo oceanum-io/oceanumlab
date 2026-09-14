@@ -2,8 +2,10 @@ name: oceanumlab
 channels:
   - conda-forge
 dependencies:
+  - jupyter-builder >=1.2.0,<2
   - jupyterlab >=4.0.0
-  - nodejs=18
+  # @jupyter/builder bundles with rspack, which needs Node ^20.19.0 || >=22.12.0
+  - nodejs >=22.12
   - pytest
   - pytest-check-links
   - pytest-jupyter >=0.6.0
