@@ -1,5 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<5", "hatch-nodejs-version>=0.3.2"]
+# JupyterLab 4.6 builds extensions with jupyter-builder, which cannot use this
+# extension's @jupyterlab/builder offline: no @jupyterlab/core-meta 4.5.x is on
+# npm, so it fetches the core metadata from GitHub and fails whenever GitHub
+# rate-limits the runner. Building with 4.5 keeps the webpack builder, needs no
+# network, and the result still loads in every JupyterLab 4.x.
+requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<4.6", "hatch-nodejs-version>=0.3.2"]
 build-backend = "hatchling.build"
 
 [project]
@@ -81,7 +86,9 @@ version_cmd = "hatch version"
 
 [tool.jupyter-releaser.hooks]
 before-build-npm = [
-    "python -m pip install 'jupyterlab>=4.0.0,<5'",
+    # Same <4.6 pin as [build-system]: the npm build in Check Release otherwise
+    # installs JupyterLab 4.6 and takes the GitHub core-meta lookup.
+    "python -m pip install 'jupyterlab>=4.0.0,<4.6'",
     "jlpm",
     "jlpm build:prod"
 ]

@@ -33,7 +33,8 @@ jobs:
       - name: Install dependencies
         run: |
           set -eux
-          python -m pip install -U "jupyterlab>=4.0.0,<5" build
+          # <4.6 to build: see [build-system] in pyproject.toml
+          python -m pip install -U "jupyterlab>=4.0.0,<4.6" build
           # npm trusted publishing needs npm >= 11.5.1
           npm install -g npm@latest
 
