@@ -1,7 +1,6 @@
 import React from 'react';
 import { ReactWidget } from '@jupyterlab/apputils';
-
-declare const DATAMESH_UI_SERVICE: string;
+import { DATAMESH_UI_SERVICE } from './constants';
 
 export class DatameshUI extends ReactWidget {
   render(): React.ReactElement {

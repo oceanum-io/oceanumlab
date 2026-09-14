@@ -31,7 +31,7 @@ pip uninstall oceanumlab
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
+Note: You will need NodeJS 22.12 or later (or 20.19+) to build the extension package.
 
 The `jlpm` command is JupyterLab's pinned version of
 [yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
@@ -40,10 +40,10 @@ The `jlpm` command is JupyterLab's pinned version of
 ```bash
 # Clone the repo to your local environment
 # Change directory to the oceanumlab directory
-# Install package in development mode
-pip install -e "."
+# Install package in development mode, with jupyter-builder for building the extension
+pip install -e ".[dev]"
 # Link your development version of the extension with JupyterLab
-jupyter labextension develop . --overwrite
+jupyter-builder develop . --overwrite
 # Rebuild extension Typescript source after making changes
 jlpm build
 ```
@@ -71,7 +71,7 @@ jupyter lab build --minimize=False
 pip uninstall oceanumlab
 ```
 
-In development mode, you will also need to remove the symlink created by `jupyter labextension develop`
+In development mode, you will also need to remove the symlink created by `jupyter-builder develop`
 command. To find its location, you can run `jupyter labextension list` to figure out where the `labextensions`
 folder is located. Then you can remove the symlink named `oceanumlab` within that folder.
 
