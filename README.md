@@ -31,27 +31,59 @@ pip uninstall oceanumlab
 
 ### Development install
 
-Note: You will need NodeJS 22.12 or later (or 20.19+) to build the extension package.
+The extension is built with [jupyter-builder](https://github.com/jupyterlab/jupyter-builder),
+which bundles it with rspack. You will need:
 
-The `jlpm` command is JupyterLab's pinned version of
-[yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
-`yarn` or `npm` in lieu of `jlpm` below.
+- Python 3.10 or later
+- Node.js 22.12 or later (or 20.19+), which rspack requires
+
+The `jlpm` command is a pinned version of [yarn](https://yarnpkg.com/) that is
+installed with jupyter-builder. You may use `yarn` or `npm` in lieu of `jlpm` below.
+
+Create an environment, either with conda, which also installs Node.js and jupyter-builder:
 
 ```bash
 # Clone the repo to your local environment
 # Change directory to the oceanumlab directory
-# Install package in development mode, with jupyter-builder for building the extension
-pip install -e ".[dev]"
+conda env create -f environment.yml
+conda activate oceanumlab
+```
+
+or with a virtual environment, using your own Node.js:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+Then install the extension in development mode:
+
+```bash
+# Install the package in development mode. The dev extra installs jupyter-builder
+# and the test extra installs the server test dependencies. This also enables the
+# server extension.
+pip install -e ".[dev,test]"
 # Link your development version of the extension with JupyterLab
 jupyter-builder develop . --overwrite
-# Rebuild extension Typescript source after making changes
+# Rebuild the extension after making changes
+# Unlike the steps above, which you only do once, do this every time you make a change
 jlpm build
 ```
+
+Every `pip install -e` puts a copy of the built extension back in place of the link,
+so run `jupyter-builder develop . --overwrite` again after reinstalling.
+
+The main build commands are:
+
+- `jlpm build`: development build, with source maps
+- `jlpm build:prod`: production build, as used for releases
+- `jlpm clean:all`: remove the built TypeScript, the built extension and the lint caches
 
 You can watch the source directory and run JupyterLab at the same time in different terminals to watch for changes in the extension's source and automatically rebuild the extension.
 
 ```bash
 # Watch the source directory in one terminal, automatically rebuilding when needed
+# (runs tsc and jupyter-builder in watch mode)
 jlpm watch
 # Run JupyterLab in another terminal
 jupyter lab
@@ -71,9 +103,9 @@ jupyter lab build --minimize=False
 pip uninstall oceanumlab
 ```
 
-In development mode, you will also need to remove the symlink created by `jupyter-builder develop`
+In development mode, you will also need to remove the symlink created by the `jupyter-builder develop`
 command. To find its location, you can run `jupyter labextension list` to figure out where the `labextensions`
-folder is located. Then you can remove the symlink named `oceanumlab` within that folder.
+folder is located. Then you can remove the symlink named `@oceanum/oceanumlab` within that folder.
 
 ### Testing the extension
 
@@ -81,10 +113,13 @@ folder is located. Then you can remove the symlink named `oceanumlab` within tha
 
 This extension is using [Pytest](https://docs.pytest.org/) for Python code testing.
 
-Install test dependencies (needed only once):
+The test dependencies are installed by `pip install -e ".[dev,test]"` above. If you
+installed without the test extra, install them (needed only once) and restore the
+front-end extension link:
 
 ```sh
-pip install -e ".[test]"
+pip install -e ".[dev,test]"
+jupyter-builder develop . --overwrite
 ```
 
 To execute them, run:
