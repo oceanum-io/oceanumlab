@@ -18,6 +18,12 @@
       "description": "Inject Datamesh token into code.",
       "default": false
     },
+    "datameshUiUrl": {
+      "type": "string",
+      "title": "Datamesh UI URL",
+      "description": "Address of the Datamesh UI shown in the Datamesh panel. Use the address it is finally served from: the panel only accepts workspace updates from this address's origin, so an address that redirects to another origin will not update the workspace.",
+      "default": "https://ui.datamesh.oceanum.io"
+    },
     "autoRunCode": {
       "type": "boolean",
       "title": "Auto-run code",

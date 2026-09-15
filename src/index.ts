@@ -21,7 +21,7 @@ import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
-import { MAX_OBSERVE_ROUNDS } from './constants';
+import { DATAMESH_UI_SERVICE, MAX_OBSERVE_ROUNDS } from './constants';
 
 import '../style/index.css';
 
@@ -57,6 +57,15 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
+    // The `datameshUiUrl` setting; the default until the settings load.
+    let datameshUiUrl = DATAMESH_UI_SERVICE;
+
+    const findDatameshUI = (): DatameshUI | undefined =>
+      find(
+        app.shell.widgets('main'),
+        (widget: Widget) => widget.id === 'datamesh-ui'
+      ) as DatameshUI | undefined;
+
     //Try to get the datamesh token from the settings
     const updateSettings = (set: ISettingRegistry.ISettings) => {
       const token = set.get('datameshToken');
@@ -68,6 +77,12 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         }).then(res => console.log(res));
       }
       window.injectToken = set.get('injectToken').user as boolean;
+      // An open Datamesh UI panel follows a change of address.
+      datameshUiUrl = set.get('datameshUiUrl').composite as string;
+      const datameshUI = findDatameshUI();
+      if (datameshUI) {
+        datameshUI.url = datameshUiUrl;
+      }
     };
     //Try to get the datamesh token from the envars
 
@@ -91,18 +106,12 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     const openDatameshUI = (event: any): void => {
       const widgetId = 'datamesh-ui';
-      const openWidget = find(
-        app.shell.widgets('main'),
-        (widget: Widget, index: number) => {
-          return widget.id === widgetId;
-        }
-      );
-      if (openWidget) {
+      if (findDatameshUI()) {
         app.shell.activateById(widgetId);
         return;
       }
 
-      const datameshUIWidget = new DatameshUI();
+      const datameshUIWidget = new DatameshUI(datameshUiUrl);
       datameshUIWidget.title.label = 'Oceanum Datamesh';
       datameshUIWidget.id = widgetId;
       datameshUIWidget.title.closable = true;
@@ -116,6 +125,8 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       name: 'Datamesh Connect',
       icon: oceanumIcon,
       openDatameshUI: openDatameshUI,
+      datameshUiUrl: () => datameshUiUrl,
+      datameshUiFrame: () => findDatameshUI()?.frame ?? null,
       commands: app.commands,
       getCurrentWidget
     });

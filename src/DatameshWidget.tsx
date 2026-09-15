@@ -22,6 +22,7 @@ import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
 import { OCEANUM_AI_BACKEND_URL } from './constants';
+import { isDatameshUiMessage } from './datameshUiUrl';
 import { describeProgress, onProgress, type Progress } from './progress';
 
 // Configure marked for safe rendering
@@ -813,6 +814,10 @@ export interface IDatameshWidgetProps {
   name: string;
   icon: LabIcon;
   openDatameshUI: any;
+  /** The `datameshUiUrl` setting. */
+  datameshUiUrl: () => string;
+  /** The Datamesh UI panel's iframe window; `null` when the panel is closed. */
+  datameshUiFrame: () => Window | null;
   commands: CommandRegistry;
   getCurrentWidget: () => Widget;
 }
@@ -841,6 +846,17 @@ export class DatameshConnectWidget extends ReactWidget {
   }
 
   receiveIFrameMessage(event: MessageEvent): void {
+    // Any page or frame can post to this window; only the Datamesh UI panel
+    // may change the workspace.
+    if (
+      !isDatameshUiMessage(
+        event,
+        this.props.datameshUiUrl(),
+        this.props.datameshUiFrame()
+      )
+    ) {
+      return;
+    }
     if (event.data && event.data.action === 'workspace-modify') {
       this.datameshWorkspaceSpec = {
         id: event.data.id,
