@@ -63,8 +63,10 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     // The `datameshUiUrl` setting; the default until the settings load.
     let datameshUiUrl = DATAMESH_UI_SERVICE;
-    // The `aiBackendUrl` setting; the default until the settings load.
+    // The `aiBackendUrl` and `datameshToken` settings for the AI chat; the
+    // defaults until the settings load.
     let aiBackendUrl = OCEANUM_AI_BACKEND_URL;
+    let datameshTokenSetting = '';
 
     const findDatameshUI = (): DatameshUI | undefined =>
       find(
@@ -84,6 +86,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       }
       window.injectToken = set.get('injectToken').user as boolean;
       aiBackendUrl = set.get('aiBackendUrl').composite as string;
+      datameshTokenSetting = set.get('datameshToken').composite as string;
       // An open Datamesh UI panel follows a change of address.
       datameshUiUrl = set.get('datameshUiUrl').composite as string;
       const datameshUI = findDatameshUI();
@@ -134,6 +137,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       openDatameshUI: openDatameshUI,
       datameshUiUrl: () => datameshUiUrl,
       datameshUiFrame: () => findDatameshUI()?.frame ?? null,
+      datameshToken: () => datameshTokenSetting,
       aiBackendUrl: () => aiBackendUrl,
       commands: app.commands,
       getCurrentWidget

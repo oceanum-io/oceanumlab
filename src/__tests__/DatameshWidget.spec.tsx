@@ -52,7 +52,10 @@ function host(token?: () => unknown): {
   return { commands, signIn };
 }
 
-function mount(commands: CommandRegistry, backend = ''): HTMLElement {
+function mount(
+  commands: CommandRegistry,
+  { backend = '', pasted = '' } = {}
+): HTMLElement {
   widget = new DatameshConnectWidget({
     app: {} as any,
     name: 'Datamesh Connect',
@@ -60,6 +63,7 @@ function mount(commands: CommandRegistry, backend = ''): HTMLElement {
     openDatameshUI: (): void => undefined,
     datameshUiUrl: () => '',
     datameshUiFrame: () => null,
+    datameshToken: () => pasted,
     aiBackendUrl: () => backend,
     commands,
     getCurrentWidget: () => null as unknown as Widget
@@ -93,7 +97,7 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
   it('asks to sign in, then shows the chat once signed in, and hides it on sign-out', async () => {
     let token: string | null = null;
     const { commands, signIn } = host(() => token);
-    const node = mount(commands, 'https://ai.example.test/');
+    const node = mount(commands, { backend: 'https://ai.example.test/' });
 
     await until(() =>
       expect(notice(node)).toBe(
@@ -129,15 +133,32 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
   }, 15000);
 
   it('signs with a pasted token rather than the sign-in', async () => {
-    window.datameshToken = 'pasted-token';
     const { commands } = host(() => 'a-jwt');
-    const node = mount(commands);
+    const node = mount(commands, { pasted: 'pasted-token' });
 
     await until(() => expect(chat(node)).not.toBeNull());
     expect(requests).toEqual([
       {
         url: 'https://ai.oceanum.io/api/capabilities',
         headers: { 'X-Datamesh-Token': 'pasted-token' }
+      }
+    ]);
+  });
+
+  it('uses the sign-in once the pasted token is cleared, as a chat request does', async () => {
+    // window.datameshToken keeps a token after the setting is cleared, until
+    // reload. Signing the capabilities with it would disagree with the chat
+    // requests, which read the setting -- and an expired one would hide the
+    // chat from a user who is signed in.
+    window.datameshToken = 'cleared-token';
+    const { commands } = host(() => 'a-jwt');
+    const node = mount(commands, { pasted: '' });
+
+    await until(() => expect(chat(node)).not.toBeNull());
+    expect(requests).toEqual([
+      {
+        url: 'https://ai.oceanum.io/api/capabilities',
+        headers: { Authorization: 'Bearer a-jwt' }
       }
     ]);
   });

@@ -467,6 +467,17 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 }
 
+/** The settings the sidebar reaches Oceanum AI with, read on every check. */
+interface IAiSettings {
+  /**
+   * The `datameshToken` setting: the same value a chat request is signed with.
+   * Not `window.datameshToken`, which keeps a token after it is cleared.
+   */
+  datameshToken: () => string;
+  /** The `aiBackendUrl` setting. */
+  aiBackendUrl: () => string;
+}
+
 /** How the sidebar can reach Oceanum AI right now. */
 interface IAiAccess {
   /** What a request would be signed with; null when there is nothing. */
@@ -489,7 +500,7 @@ interface IAiAccess {
  */
 function useAiAccess(
   commands: CommandRegistry,
-  backendSetting: () => string
+  settings: IAiSettings
 ): IAiAccess | null {
   const [access, setAccess] = React.useState<IAiAccess | null>(null);
 
@@ -503,12 +514,12 @@ function useAiAccess(
       const mine = ++started;
       const next: IAiAccess = {
         credential: await resolveAiCredential(
-          window.datameshToken,
+          settings.datameshToken(),
           signInToken(commands)
         ),
         canSignIn: canSignIn(commands),
         canStartSignIn: commands.hasCommand(SIGN_IN_COMMAND),
-        backend: aiBackendUrl(backendSetting())
+        backend: aiBackendUrl(settings.aiBackendUrl())
       };
       if (!live || mine < applied) {
         return;
@@ -527,7 +538,7 @@ function useAiAccess(
       live = false;
       clearInterval(interval);
     };
-  }, [commands, backendSetting]);
+  }, [commands, settings]);
 
   return access;
 }
@@ -539,12 +550,12 @@ function useAiAccess(
  */
 function TokenConfigMessage({
   commands,
-  backendSetting
+  settings
 }: {
   commands: CommandRegistry;
-  backendSetting: () => string;
+  settings: IAiSettings;
 }): React.ReactElement | null {
-  const access = useAiAccess(commands, backendSetting);
+  const access = useAiAccess(commands, settings);
 
   if (!access || access.credential) {
     return null;
@@ -591,13 +602,12 @@ interface IChatMessage {
 
 interface IAIChatPanelProps {
   commands: CommandRegistry;
-  /** The `aiBackendUrl` setting. */
-  backendSetting: () => string;
+  settings: IAiSettings;
 }
 
 function AIChatPanel({
   commands,
-  backendSetting
+  settings
 }: IAIChatPanelProps): React.ReactElement | null {
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [input, setInput] = React.useState('');
@@ -618,7 +628,7 @@ function AIChatPanel({
 
   // The credential and address, re-checked every second: settings may change,
   // and the user may sign in or out of Oceanum.io.
-  const access = useAiAccess(commands, backendSetting);
+  const access = useAiAccess(commands, settings);
   const credential = access?.credential ?? null;
   // What the capabilities depend on, as a value: a new sign-in token, a new
   // pasted token or a new address each fetch them again.
@@ -903,6 +913,8 @@ export interface IDatameshWidgetProps {
   datameshUiUrl: () => string;
   /** The Datamesh UI panel's iframe window; `null` when the panel is closed. */
   datameshUiFrame: () => Window | null;
+  /** The `datameshToken` setting. */
+  datameshToken: () => string;
   /** The `aiBackendUrl` setting. */
   aiBackendUrl: () => string;
   commands: CommandRegistry;
@@ -1004,14 +1016,11 @@ export class DatameshConnectWidget extends ReactWidget {
           </UseSignal>
           <TokenConfigMessage
             commands={this.props.commands}
-            backendSetting={this.props.aiBackendUrl}
+            settings={this.props}
           />
         </div>
         <div className="datamesh-connect-divider" />
-        <AIChatPanel
-          commands={this.props.commands}
-          backendSetting={this.props.aiBackendUrl}
-        />
+        <AIChatPanel commands={this.props.commands} settings={this.props} />
       </div>
     );
   }
