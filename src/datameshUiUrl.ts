@@ -7,18 +7,11 @@
  * rather than ending up in an iframe's `src`.
  */
 import { DATAMESH_UI_SERVICE } from './constants';
+import { validHttpUrl } from './httpUrl';
 
 /** The Datamesh UI address to use for a `datameshUiUrl` setting value. */
 export function validDatameshUiUrl(url: string | null | undefined): URL {
-  try {
-    const parsed = new URL((url ?? '').trim());
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-      return parsed;
-    }
-  } catch {
-    // Empty or not a URL: the default below.
-  }
-  return new URL(DATAMESH_UI_SERVICE);
+  return validHttpUrl(url, DATAMESH_UI_SERVICE);
 }
 
 /**
