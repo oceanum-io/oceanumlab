@@ -7,6 +7,7 @@ import {
 import { ICommandPalette, Notification } from '@jupyterlab/apputils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
+import { Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
@@ -67,6 +68,8 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     // defaults until the settings load.
     let aiBackendUrl = OCEANUM_AI_BACKEND_URL;
     let datameshTokenSetting = '';
+    // Tells the sidebar the settings above have changed.
+    const settingsChanged = new Signal<JupyterFrontEnd, void>(app);
 
     const findDatameshUI = (): DatameshUI | undefined =>
       find(
@@ -93,6 +96,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       if (datameshUI) {
         datameshUI.url = datameshUiUrl;
       }
+      settingsChanged.emit();
     };
     //Try to get the datamesh token from the envars
 
@@ -139,6 +143,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       datameshUiFrame: () => findDatameshUI()?.frame ?? null,
       datameshToken: () => datameshTokenSetting,
       aiBackendUrl: () => aiBackendUrl,
+      settingsChanged,
       commands: app.commands,
       getCurrentWidget
     });

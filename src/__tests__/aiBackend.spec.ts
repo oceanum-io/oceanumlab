@@ -1,8 +1,12 @@
 import schema from '../../schema/datamesh-connect.json';
 import {
   ACCESS_TOKEN_COMMAND,
+  SIGN_IN_COMMAND,
+  SIGN_OUT_COMMAND,
   aiBackendUrl,
+  aiCredentialSource,
   canSignIn,
+  isSignedIn,
   resolveAiCredential,
   signInToken,
   type AuthCommands
@@ -116,26 +120,141 @@ describe('resolveAiCredential', () => {
   });
 });
 
-describe('signInToken', () => {
-  const host = (commands: Record<string, () => unknown>) => ({
-    hasCommand: jest.fn((id: string) => id in commands),
-    execute: jest.fn(async (id: string) => commands[id]())
+/**
+ * A host registry: `commands` are registered, `enabled`/`visible` say what its
+ * queries answer. Queries must never execute anything.
+ */
+const host = (
+  commands: Record<string, () => unknown>,
+  { enabled = [] as string[], visible = [] as string[] } = {}
+) => ({
+  hasCommand: jest.fn((id: string) => id in commands),
+  execute: jest.fn(async (id: string) => commands[id]()),
+  isEnabled: jest.fn((id: string) => enabled.includes(id)),
+  isVisible: jest.fn((id: string) => visible.includes(id))
+});
+
+const asCommands = (commands: ReturnType<typeof host>): AuthCommands =>
+  commands as unknown as AuthCommands;
+
+describe('canSignIn and isSignedIn', () => {
+  const all = {
+    [ACCESS_TOKEN_COMMAND]: () => 'a-jwt',
+    [SIGN_IN_COMMAND]: (): void => undefined,
+    [SIGN_OUT_COMMAND]: (): void => undefined
+  };
+
+  it('reads the queries, and runs nothing', () => {
+    const commands = host(all, {
+      enabled: [SIGN_IN_COMMAND],
+      visible: [SIGN_OUT_COMMAND]
+    });
+
+    expect(canSignIn(asCommands(commands))).toBe(true);
+    expect(isSignedIn(asCommands(commands))).toBe(true);
+    expect(commands.execute).not.toHaveBeenCalled();
   });
 
-  it('is null, without running anything, when the host has no sign-in', async () => {
+  it('is signed out while the sign-out command is hidden', () => {
+    const commands = host(all, { enabled: [SIGN_IN_COMMAND] });
+
+    expect(canSignIn(asCommands(commands))).toBe(true);
+    expect(isSignedIn(asCommands(commands))).toBe(false);
+  });
+
+  it('cannot sign in where the site has sign-in disabled', () => {
+    const commands = host(all, { visible: [SIGN_OUT_COMMAND] });
+
+    expect(canSignIn(asCommands(commands))).toBe(false);
+  });
+
+  it('is false where the host has no such commands', () => {
     const commands = host({});
 
-    expect(canSignIn(commands as unknown as AuthCommands)).toBe(false);
-    expect(await signInToken(commands as unknown as AuthCommands)()).toBeNull();
+    expect(canSignIn(asCommands(commands))).toBe(false);
+    expect(isSignedIn(asCommands(commands))).toBe(false);
+    expect(commands.execute).not.toHaveBeenCalled();
+  });
+
+  it('is false when a query throws', () => {
+    const commands = {
+      hasCommand: () => true,
+      execute: jest.fn(),
+      isEnabled: () => {
+        throw new Error('no');
+      },
+      isVisible: () => {
+        throw new Error('no');
+      }
+    } as unknown as AuthCommands;
+
+    expect(canSignIn(commands)).toBe(false);
+    expect(isSignedIn(commands)).toBe(false);
+  });
+});
+
+describe('aiCredentialSource', () => {
+  const signedIn = {
+    enabled: [SIGN_IN_COMMAND],
+    visible: [SIGN_OUT_COMMAND]
+  };
+  const all = {
+    [ACCESS_TOKEN_COMMAND]: () => 'a-jwt',
+    [SIGN_IN_COMMAND]: (): void => undefined,
+    [SIGN_OUT_COMMAND]: (): void => undefined
+  };
+
+  it('is the pasted token when there is one', () => {
+    const commands = host(all, signedIn);
+
+    expect(aiCredentialSource('  a-token ', asCommands(commands))).toBe(
+      'datamesh-token'
+    );
+    expect(commands.execute).not.toHaveBeenCalled();
+  });
+
+  it('is the sign-in while signed in, and nothing once signed out', () => {
+    const commands = host(all, signedIn);
+    expect(aiCredentialSource('', asCommands(commands))).toBe('sign-in');
+    expect(commands.execute).not.toHaveBeenCalled();
+
+    const out = host(all, { enabled: [SIGN_IN_COMMAND] });
+    expect(aiCredentialSource('', asCommands(out))).toBeNull();
+  });
+
+  it('is nothing where the host has no access-token command', () => {
+    const commands = host(
+      { [SIGN_OUT_COMMAND]: (): void => undefined },
+      { visible: [SIGN_OUT_COMMAND] }
+    );
+
+    expect(aiCredentialSource('', asCommands(commands))).toBeNull();
+  });
+
+  it.each([
+    ['blank', '   '],
+    ['missing', undefined],
+    ['not a string', 42]
+  ])('treats a %s pasted token as none', (_, value) => {
+    const commands = host(all, signedIn);
+
+    expect(aiCredentialSource(value, asCommands(commands))).toBe('sign-in');
+  });
+});
+
+describe('signInToken', () => {
+  it('is null, without running anything, when the host has no access-token command', async () => {
+    const commands = host({});
+
+    expect(await signInToken(asCommands(commands))()).toBeNull();
     expect(commands.execute).not.toHaveBeenCalled();
   });
 
   it("is what the host's access-token command answers", async () => {
     let token: string | null = 'a-jwt';
     const commands = host({ [ACCESS_TOKEN_COMMAND]: () => token });
-    const get = signInToken(commands as unknown as AuthCommands);
+    const get = signInToken(asCommands(commands));
 
-    expect(canSignIn(commands as unknown as AuthCommands)).toBe(true);
     expect(await get()).toBe('a-jwt');
     token = null;
     expect(await get()).toBeNull();
@@ -144,7 +263,7 @@ describe('signInToken', () => {
 
   it('checks for the command on every call, so a host registering it late is found', async () => {
     const commands: Record<string, () => unknown> = {};
-    const get = signInToken(host(commands) as unknown as AuthCommands);
+    const get = signInToken(asCommands(host(commands)));
 
     expect(await get()).toBeNull();
     commands[ACCESS_TOKEN_COMMAND] = () => 'a-jwt';

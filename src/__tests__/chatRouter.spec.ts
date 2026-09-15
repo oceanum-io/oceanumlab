@@ -10,11 +10,20 @@ const settingsWith = (values: Record<string, unknown>) =>
 
 const settings = settingsWith({ datameshToken: 'a-token' });
 
-/** A host with these commands, each answering with what its function returns. */
-const hostCommands = (commands: Record<string, () => unknown>) =>
+/**
+ * A host with these commands, each answering with what its function returns.
+ * `enabled` and `visible` are what the registry's queries answer, which is how
+ * the sign-in state is read without running anything.
+ */
+const hostCommands = (
+  commands: Record<string, () => unknown>,
+  { enabled = [] as string[], visible = [] as string[] } = {}
+) =>
   ({
     hasCommand: jest.fn((id: string) => id in commands),
-    execute: jest.fn(async (id: string) => commands[id]())
+    execute: jest.fn(async (id: string) => commands[id]()),
+    isEnabled: jest.fn((id: string) => enabled.includes(id)),
+    isVisible: jest.fn((id: string) => visible.includes(id))
   }) as AuthCommands & { execute: jest.Mock };
 
 /** Plain JupyterLab: no Oceanum.io sign-in to lend. */
@@ -334,11 +343,19 @@ describe('ChatRouter: the streamed answer', () => {
 
 describe('ChatRouter: where a request goes, and what it is signed with', () => {
   const noNotebook = async (): Promise<null> => null;
+  /** Oceanum Notebook with sign-in configured, and someone signed in. */
   const signedIn = (token: () => unknown) =>
-    hostCommands({
-      'oceanum-auth:access-token': token,
-      'oceanum-auth:sign-in': () => undefined
-    });
+    hostCommands(
+      {
+        'oceanum-auth:access-token': token,
+        'oceanum-auth:sign-in': () => undefined,
+        'oceanum-auth:sign-out': () => undefined
+      },
+      {
+        enabled: ['oceanum-auth:sign-in'],
+        visible: ['oceanum-auth:sign-out']
+      }
+    );
 
   it('sends a pasted token as X-Datamesh-Token to the default backend', async () => {
     const router = new ChatRouter(settings, noSignIn, noNotebook);
@@ -451,6 +468,23 @@ describe('ChatRouter: where a request goes, and what it is signed with', () => {
       'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
     );
     expect((globalThis as any).fetch).not.toHaveBeenCalled();
+  });
+
+  it('asks for a Datamesh token where the site has sign-in disabled', async () => {
+    // The command is there, but the site has no Oceanum.io environment, so
+    // telling the user to sign in would be telling them to do the impossible.
+    const router = new ChatRouter(
+      settingsWith({}),
+      hostCommands({
+        'oceanum-auth:access-token': () => null,
+        'oceanum-auth:sign-in': () => undefined
+      }),
+      noNotebook
+    );
+
+    await expect(router.route('hello')).rejects.toThrow(
+      'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
+    );
   });
 
   it.each([

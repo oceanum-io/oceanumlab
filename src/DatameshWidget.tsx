@@ -14,7 +14,7 @@ import { LabIcon, addIcon } from '@jupyterlab/ui-components';
 import { CommandRegistry } from '@lumino/commands';
 import { MimeData, ReadonlyJSONArray } from '@lumino/coreutils';
 import { Drag } from '@lumino/dragdrop';
-import { Signal } from '@lumino/signaling';
+import { ISignal, Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
 
 import React from 'react';
@@ -24,10 +24,12 @@ import { DatasourceItem } from './DatasourceItem';
 import {
   SIGN_IN_COMMAND,
   aiBackendUrl,
+  aiCredentialSource,
   canSignIn,
+  pastedToken,
   resolveAiCredential,
   signInToken,
-  type IAiCredential
+  type AiCredentialSource
 } from './aiBackend';
 import { isDatameshUiMessage } from './datameshUiUrl';
 import { describeProgress, onProgress, type Progress } from './progress';
@@ -467,7 +469,7 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 }
 
-/** The settings the sidebar reaches Oceanum AI with, read on every check. */
+/** The settings the sidebar reaches Oceanum AI with. */
 interface IAiSettings {
   /**
    * The `datameshToken` setting: the same value a chat request is signed with.
@@ -476,67 +478,69 @@ interface IAiSettings {
   datameshToken: () => string;
   /** The `aiBackendUrl` setting. */
   aiBackendUrl: () => string;
+  /** Emitted when the settings change. */
+  settingsChanged: ISignal<unknown, void>;
 }
 
-/** How the sidebar can reach Oceanum AI right now. */
+/**
+ * How the sidebar can reach Oceanum AI right now. Holds no sign-in token:
+ * finding one out means running the host's command.
+ */
 interface IAiAccess {
-  /** What a request would be signed with; null when there is nothing. */
-  credential: IAiCredential | null;
-  /** Whether the host signs users in to Oceanum.io. */
+  /** Which credential a request would carry; null when there is none. */
+  source: AiCredentialSource | null;
+  /** The pasted Datamesh token, trimmed; '' when there is none. */
+  pasted: string;
+  /** Whether the host can sign the user in to Oceanum.io on this site. */
   canSignIn: boolean;
-  /** Whether the host has a command that starts signing in. */
-  canStartSignIn: boolean;
   /** The backend address, from the `aiBackendUrl` setting. */
   backend: string;
 }
 
+function readAiAccess(
+  commands: CommandRegistry,
+  settings: IAiSettings
+): IAiAccess {
+  const datameshToken = settings.datameshToken();
+  return {
+    source: aiCredentialSource(datameshToken, commands),
+    pasted: pastedToken(datameshToken),
+    canSignIn: canSignIn(commands),
+    backend: aiBackendUrl(settings.aiBackendUrl())
+  };
+}
+
 /**
- * How the sidebar can reach Oceanum AI, checked every second: the pasted token
- * and the address follow the settings, and the host's sign-in changes when the
- * user signs in or out. Null until the first check has answered.
+ * How the sidebar can reach Oceanum AI, read again whenever the settings or the
+ * commands change: the host calls `notifyCommandChanged` when the user signs
+ * in or out.
  *
- * The credential is resolved the same way a chat request resolves it, and is
- * only held in memory: the sign-in token is never written anywhere.
+ * Only the registry's queries are used, never `execute`, and nothing runs on a
+ * timer: every executed command closes JupyterLab's command palette.
  */
 function useAiAccess(
   commands: CommandRegistry,
   settings: IAiSettings
-): IAiAccess | null {
-  const [access, setAccess] = React.useState<IAiAccess | null>(null);
+): IAiAccess {
+  const [access, setAccess] = React.useState(() =>
+    readAiAccess(commands, settings)
+  );
 
   React.useEffect(() => {
-    let live = true;
-    // Checks can overlap if the host is slow to answer; an older one must not
-    // overwrite what a newer one found.
-    let started = 0;
-    let applied = 0;
-    const check = async () => {
-      const mine = ++started;
-      const next: IAiAccess = {
-        credential: await resolveAiCredential(
-          settings.datameshToken(),
-          signInToken(commands)
-        ),
-        canSignIn: canSignIn(commands),
-        canStartSignIn: commands.hasCommand(SIGN_IN_COMMAND),
-        backend: aiBackendUrl(settings.aiBackendUrl())
-      };
-      if (!live || mine < applied) {
-        return;
-      }
-      applied = mine;
+    const update = () => {
+      const next = readAiAccess(commands, settings);
       // Same content keeps the same object, so nothing downstream re-runs.
       setAccess(prev =>
         JSON.stringify(prev) === JSON.stringify(next) ? prev : next
       );
     };
-    void check();
-    const interval = setInterval(() => {
-      void check();
-    }, 1000);
+    // Anything that changed between the first render and now.
+    update();
+    commands.commandChanged.connect(update);
+    settings.settingsChanged.connect(update);
     return () => {
-      live = false;
-      clearInterval(interval);
+      commands.commandChanged.disconnect(update);
+      settings.settingsChanged.disconnect(update);
     };
   }, [commands, settings]);
 
@@ -545,7 +549,7 @@ function useAiAccess(
 
 /**
  * Shows a message prompting the user to sign in to Oceanum.io, or to configure
- * their Datamesh token where the host has no sign-in. Only renders when there
+ * their Datamesh token where the site has no sign-in. Only renders when there
  * is no credential.
  */
 function TokenConfigMessage({
@@ -557,7 +561,7 @@ function TokenConfigMessage({
 }): React.ReactElement | null {
   const access = useAiAccess(commands, settings);
 
-  if (!access || access.credential) {
+  if (access.source) {
     return null;
   }
 
@@ -565,17 +569,14 @@ function TokenConfigMessage({
     commands.execute('settingeditor:open', { query: 'Oceanum' });
 
   if (access.canSignIn) {
+    const signIn = () =>
+      commands.execute(SIGN_IN_COMMAND).catch(() => {
+        console.warn('Oceanum AI: could not start signing in to Oceanum.io.');
+      });
     return (
       <div className="oceanum-token-config">
-        {access.canStartSignIn ? (
-          <a onClick={() => void commands.execute(SIGN_IN_COMMAND)}>
-            Sign in to Oceanum.io
-          </a>
-        ) : (
-          'Sign in to Oceanum.io'
-        )}{' '}
-        to use Oceanum AI, or set a <a onClick={openSettings}>Datamesh token</a>
-        .
+        <a onClick={() => void signIn()}>Sign in to Oceanum.io</a> to use
+        Oceanum AI, or set a <a onClick={openSettings}>Datamesh token</a>.
       </div>
     );
   }
@@ -626,29 +627,54 @@ function AIChatPanel({
   const [historyIndex, setHistoryIndex] = React.useState(-1);
   const [tempInput, setTempInput] = React.useState('');
 
-  // The credential and address, re-checked every second: settings may change,
-  // and the user may sign in or out of Oceanum.io.
+  // Which credential and address the chat has, as the settings and the host
+  // report them.
   const access = useAiAccess(commands, settings);
-  const credential = access?.credential ?? null;
-  // What the capabilities depend on, as a value: a new sign-in token, a new
-  // pasted token or a new address each fetch them again.
-  const capabilitiesKey = credential
-    ? JSON.stringify([access.backend, credential.headers])
+  // What the capabilities depend on: which credential, the pasted token and
+  // the address. Not the sign-in token itself: it refreshes, and finding it out
+  // runs the host's command.
+  const capabilitiesKey = access.source
+    ? JSON.stringify([access.source, access.pasted, access.backend])
     : '';
 
   // Check if code capability is enabled (null = loading/unknown)
   const [codeEnabled, setCodeEnabled] = React.useState<boolean | null>(null);
 
+  // The sidebar's one pending access-token request, shared rather than
+  // repeated if the capabilities are asked for again before it answers.
+  const tokenRequest = React.useRef<Promise<unknown> | null>(null);
+
   // Fetch capabilities when the credential or the address changes
   React.useEffect(() => {
-    if (!credential) {
+    if (!access.source) {
       setCodeEnabled(null);
       return;
     }
 
     // An answer for a credential that has since changed is dropped.
     let current = true;
+    const signInTokenOnce = (): Promise<unknown> => {
+      if (!tokenRequest.current) {
+        tokenRequest.current = signInToken(commands)().finally(() => {
+          tokenRequest.current = null;
+        });
+      }
+      return tokenRequest.current;
+    };
     const fetchCapabilities = async () => {
+      const credential = await resolveAiCredential(
+        access.pasted,
+        signInTokenOnce
+      );
+      if (!current) {
+        return;
+      }
+      if (!credential) {
+        // The host says signed in but has no token to give: leave it to a
+        // request to report, rather than hide the chat.
+        setCodeEnabled(null);
+        return;
+      }
       try {
         const response = await fetch(`${access.backend}/api/capabilities`, {
           headers: credential.headers
@@ -818,7 +844,7 @@ function AIChatPanel({
   };
 
   // Hide AI panel if no credential or code capability is not enabled
-  if (!credential || codeEnabled === false) {
+  if (!access.source || codeEnabled === false) {
     return null;
   }
 
@@ -917,6 +943,8 @@ export interface IDatameshWidgetProps {
   datameshToken: () => string;
   /** The `aiBackendUrl` setting. */
   aiBackendUrl: () => string;
+  /** Emitted when the settings change. */
+  settingsChanged: ISignal<unknown, void>;
   commands: CommandRegistry;
   getCurrentWidget: () => Widget;
 }
