@@ -21,7 +21,11 @@ import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
-import { DATAMESH_UI_SERVICE, MAX_OBSERVE_ROUNDS } from './constants';
+import {
+  DATAMESH_UI_SERVICE,
+  MAX_OBSERVE_ROUNDS,
+  OCEANUM_AI_BACKEND_URL
+} from './constants';
 
 import '../style/index.css';
 
@@ -59,6 +63,8 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     // The `datameshUiUrl` setting; the default until the settings load.
     let datameshUiUrl = DATAMESH_UI_SERVICE;
+    // The `aiBackendUrl` setting; the default until the settings load.
+    let aiBackendUrl = OCEANUM_AI_BACKEND_URL;
 
     const findDatameshUI = (): DatameshUI | undefined =>
       find(
@@ -77,6 +83,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         }).then(res => console.log(res));
       }
       window.injectToken = set.get('injectToken').user as boolean;
+      aiBackendUrl = set.get('aiBackendUrl').composite as string;
       // An open Datamesh UI panel follows a change of address.
       datameshUiUrl = set.get('datameshUiUrl').composite as string;
       const datameshUI = findDatameshUI();
@@ -127,6 +134,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       openDatameshUI: openDatameshUI,
       datameshUiUrl: () => datameshUiUrl,
       datameshUiFrame: () => findDatameshUI()?.frame ?? null,
+      aiBackendUrl: () => aiBackendUrl,
       commands: app.commands,
       getCurrentWidget
     });
@@ -180,7 +188,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         // The panel the current request read its selected cell from, if the
         // notebook was open: a code answer may replace that cell only there.
         let readFrom: NotebookPanel | null = null;
-        const router = new ChatRouter(settings, async () => {
+        const router = new ChatRouter(settings, app.commands, async () => {
           const open = await pin.current();
           readFrom = open;
           if (open) {

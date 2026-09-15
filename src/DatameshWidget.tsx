@@ -21,7 +21,14 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
-import { OCEANUM_AI_BACKEND_URL } from './constants';
+import {
+  SIGN_IN_COMMAND,
+  aiBackendUrl,
+  canSignIn,
+  resolveAiCredential,
+  signInToken,
+  type IAiCredential
+} from './aiBackend';
 import { isDatameshUiMessage } from './datameshUiUrl';
 import { describeProgress, onProgress, type Progress } from './progress';
 
@@ -460,38 +467,112 @@ class DatameshWorkspaceDisplay extends React.Component<IDatameshWorkspaceProps> 
   }
 }
 
+/** How the sidebar can reach Oceanum AI right now. */
+interface IAiAccess {
+  /** What a request would be signed with; null when there is nothing. */
+  credential: IAiCredential | null;
+  /** Whether the host signs users in to Oceanum.io. */
+  canSignIn: boolean;
+  /** Whether the host has a command that starts signing in. */
+  canStartSignIn: boolean;
+  /** The backend address, from the `aiBackendUrl` setting. */
+  backend: string;
+}
+
 /**
- * Shows a message prompting user to configure their Datamesh token.
- * Only renders when no token is set.
+ * How the sidebar can reach Oceanum AI, checked every second: the pasted token
+ * and the address follow the settings, and the host's sign-in changes when the
+ * user signs in or out. Null until the first check has answered.
+ *
+ * The credential is resolved the same way a chat request resolves it, and is
+ * only held in memory: the sign-in token is never written anywhere.
  */
-function TokenConfigMessage({
-  commands
-}: {
-  commands: CommandRegistry;
-}): React.ReactElement | null {
-  const [hasToken, setHasToken] = React.useState(!!window.datameshToken);
+function useAiAccess(
+  commands: CommandRegistry,
+  backendSetting: () => string
+): IAiAccess | null {
+  const [access, setAccess] = React.useState<IAiAccess | null>(null);
 
   React.useEffect(() => {
-    const checkToken = () => setHasToken(!!window.datameshToken);
-    const interval = setInterval(checkToken, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    let live = true;
+    // Checks can overlap if the host is slow to answer; an older one must not
+    // overwrite what a newer one found.
+    let started = 0;
+    let applied = 0;
+    const check = async () => {
+      const mine = ++started;
+      const next: IAiAccess = {
+        credential: await resolveAiCredential(
+          window.datameshToken,
+          signInToken(commands)
+        ),
+        canSignIn: canSignIn(commands),
+        canStartSignIn: commands.hasCommand(SIGN_IN_COMMAND),
+        backend: aiBackendUrl(backendSetting())
+      };
+      if (!live || mine < applied) {
+        return;
+      }
+      applied = mine;
+      // Same content keeps the same object, so nothing downstream re-runs.
+      setAccess(prev =>
+        JSON.stringify(prev) === JSON.stringify(next) ? prev : next
+      );
+    };
+    void check();
+    const interval = setInterval(() => {
+      void check();
+    }, 1000);
+    return () => {
+      live = false;
+      clearInterval(interval);
+    };
+  }, [commands, backendSetting]);
 
-  if (hasToken) {
+  return access;
+}
+
+/**
+ * Shows a message prompting the user to sign in to Oceanum.io, or to configure
+ * their Datamesh token where the host has no sign-in. Only renders when there
+ * is no credential.
+ */
+function TokenConfigMessage({
+  commands,
+  backendSetting
+}: {
+  commands: CommandRegistry;
+  backendSetting: () => string;
+}): React.ReactElement | null {
+  const access = useAiAccess(commands, backendSetting);
+
+  if (!access || access.credential) {
     return null;
+  }
+
+  const openSettings = () =>
+    commands.execute('settingeditor:open', { query: 'Oceanum' });
+
+  if (access.canSignIn) {
+    return (
+      <div className="oceanum-token-config">
+        {access.canStartSignIn ? (
+          <a onClick={() => void commands.execute(SIGN_IN_COMMAND)}>
+            Sign in to Oceanum.io
+          </a>
+        ) : (
+          'Sign in to Oceanum.io'
+        )}{' '}
+        to use Oceanum AI, or set a <a onClick={openSettings}>Datamesh token</a>
+        .
+      </div>
+    );
   }
 
   return (
     <div className="oceanum-token-config">
-      Set your{' '}
-      <a
-        onClick={() =>
-          commands.execute('settingeditor:open', { query: 'Oceanum' })
-        }
-      >
-        Datamesh token
-      </a>{' '}
-      to enable Oceanum.oi services{' '}
+      Set your <a onClick={openSettings}>Datamesh token</a> to enable Oceanum.io
+      services{' '}
       <a
         href="https://home.oceanum.io/account"
         target="_blank"
@@ -510,10 +591,13 @@ interface IChatMessage {
 
 interface IAIChatPanelProps {
   commands: CommandRegistry;
+  /** The `aiBackendUrl` setting. */
+  backendSetting: () => string;
 }
 
 function AIChatPanel({
-  commands
+  commands,
+  backendSetting
 }: IAIChatPanelProps): React.ReactElement | null {
   const [messages, setMessages] = React.useState<IChatMessage[]>([]);
   const [input, setInput] = React.useState('');
@@ -532,55 +616,56 @@ function AIChatPanel({
   const [historyIndex, setHistoryIndex] = React.useState(-1);
   const [tempInput, setTempInput] = React.useState('');
 
-  // Track the actual token value to detect changes
-  const [token, setToken] = React.useState(window.datameshToken || '');
-  const hasToken = !!token;
+  // The credential and address, re-checked every second: settings may change,
+  // and the user may sign in or out of Oceanum.io.
+  const access = useAiAccess(commands, backendSetting);
+  const credential = access?.credential ?? null;
+  // What the capabilities depend on, as a value: a new sign-in token, a new
+  // pasted token or a new address each fetch them again.
+  const capabilitiesKey = credential
+    ? JSON.stringify([access.backend, credential.headers])
+    : '';
 
   // Check if code capability is enabled (null = loading/unknown)
   const [codeEnabled, setCodeEnabled] = React.useState<boolean | null>(null);
 
-  // Re-check token periodically (settings may change)
+  // Fetch capabilities when the credential or the address changes
   React.useEffect(() => {
-    const checkToken = () => {
-      const currentToken = window.datameshToken || '';
-      if (currentToken !== token) {
-        setToken(currentToken);
-      }
-    };
-    const interval = setInterval(checkToken, 1000);
-    return () => clearInterval(interval);
-  }, [token]);
-
-  // Fetch capabilities when token changes
-  React.useEffect(() => {
-    if (!token) {
+    if (!credential) {
       setCodeEnabled(null);
       return;
     }
 
+    // An answer for a credential that has since changed is dropped.
+    let current = true;
     const fetchCapabilities = async () => {
       try {
-        const response = await fetch(
-          `${OCEANUM_AI_BACKEND_URL}/api/capabilities`,
-          {
-            headers: {
-              'X-Datamesh-Token': token
-            }
-          }
-        );
+        const response = await fetch(`${access.backend}/api/capabilities`, {
+          headers: credential.headers
+        });
+        if (!current) {
+          return;
+        }
         if (response.ok) {
           const data = await response.json();
-          setCodeEnabled(data.code === true);
+          if (current) {
+            setCodeEnabled(data.code === true);
+          }
         } else {
           setCodeEnabled(false);
         }
       } catch {
-        setCodeEnabled(false);
+        if (current) {
+          setCodeEnabled(false);
+        }
       }
     };
 
     void fetchCapabilities();
-  }, [token]);
+    return () => {
+      current = false;
+    };
+  }, [capabilitiesKey]);
 
   // Auto-scroll to bottom when messages change
   React.useEffect(() => {
@@ -722,8 +807,8 @@ function AIChatPanel({
     }
   };
 
-  // Hide AI panel if no token or code capability is not enabled
-  if (!hasToken || codeEnabled === false) {
+  // Hide AI panel if no credential or code capability is not enabled
+  if (!credential || codeEnabled === false) {
     return null;
   }
 
@@ -818,6 +903,8 @@ export interface IDatameshWidgetProps {
   datameshUiUrl: () => string;
   /** The Datamesh UI panel's iframe window; `null` when the panel is closed. */
   datameshUiFrame: () => Window | null;
+  /** The `aiBackendUrl` setting. */
+  aiBackendUrl: () => string;
   commands: CommandRegistry;
   getCurrentWidget: () => Widget;
 }
@@ -915,10 +1002,16 @@ export class DatameshConnectWidget extends ReactWidget {
               this.renderDisplay(datameshWorkspace)
             }
           </UseSignal>
-          <TokenConfigMessage commands={this.props.commands} />
+          <TokenConfigMessage
+            commands={this.props.commands}
+            backendSetting={this.props.aiBackendUrl}
+          />
         </div>
         <div className="datamesh-connect-divider" />
-        <AIChatPanel commands={this.props.commands} />
+        <AIChatPanel
+          commands={this.props.commands}
+          backendSetting={this.props.aiBackendUrl}
+        />
       </div>
     );
   }
