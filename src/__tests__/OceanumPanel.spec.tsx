@@ -47,13 +47,16 @@ async function mount(): Promise<DatameshConnectWidget> {
  * two lost one of them.
  */
 describe('the Oceanum panel', () => {
-  it('offers all three tabs', async () => {
+  it('offers no Oceanum AI tab when the chat has no credential', async () => {
+    // AIChatPanel renders nothing without one, so a labelled tab would open on the
+    // same emptiness the panel showed before there were tabs, but now advertised.
     const widget = await mount();
     const labels = Array.from(widget.node.querySelectorAll('[role="tab"]')).map(
       node => node.textContent
     );
 
-    expect(labels).toEqual(['Notebooks', 'Datamesh', 'Oceanum AI']);
+    expect(labels).toEqual(['Notebooks', 'Datamesh']);
+    expect(widget.node.querySelector('#oceanum-tabpanel-ai')).toBeNull();
 
     widget.dispose();
   });
@@ -68,19 +71,6 @@ describe('the Oceanum panel', () => {
       widget.node.querySelector('.datamesh-connect-workspace')
     ).not.toBeNull();
     expect(widget.node.textContent).toContain('Datamesh Workspace');
-
-    widget.dispose();
-  });
-
-  it('gives the AI chat its own pane', async () => {
-    const widget = await mount();
-    const pane = widget.node.querySelector('#oceanum-tabpanel-ai');
-
-    expect(pane).not.toBeNull();
-    // Deliberately not asserting content: with no token and no sign-in AIChatPanel
-    // renders nothing, as it did before this change when it sat below the divider.
-    // The tab now labels that emptiness, which is worth revisiting separately.
-    expect(pane?.getAttribute('role')).toBe('tabpanel');
 
     widget.dispose();
   });

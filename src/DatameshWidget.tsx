@@ -957,6 +957,56 @@ export interface IDatameshWidgetProps {
 }
 
 /**
+ * The panel's tabs.
+ *
+ * A component rather than a list built in `render`, because whether Oceanum AI is
+ * reachable is not static: `useAiAccess` re-reads it when the settings change and when
+ * the host signals a sign-in or sign-out. An AI tab is only offered when the chat has a
+ * credential to work with — otherwise it would open on the same nothing the panel
+ * rendered before there were tabs, except now with a label promising otherwise.
+ */
+function PanelTabs({
+  auth,
+  commands,
+  settings,
+  renderDatamesh,
+  selected,
+  onSelect
+}: {
+  auth: IOceanumAuth | null;
+  commands: CommandRegistry;
+  settings: IAiSettings;
+  renderDatamesh: () => React.ReactElement;
+  selected: string;
+  onSelect: (id: string) => void;
+}): React.ReactElement {
+  const access = useAiAccess(commands, settings);
+  const tabs: ITab[] = [
+    {
+      id: 'notebooks',
+      label: 'Notebooks',
+      render: () =>
+        auth ? (
+          <StoredNotebooks auth={auth} />
+        ) : (
+          <div className="oceanum-text-empty">
+            Oceanum.io sign-in is not configured for this host.
+          </div>
+        )
+    },
+    { id: 'datamesh', label: 'Datamesh', render: renderDatamesh }
+  ];
+  if (access.source) {
+    tabs.push({
+      id: 'ai',
+      label: 'Oceanum AI',
+      render: () => <AIChatPanel commands={commands} settings={settings} />
+    });
+  }
+  return <Tabs tabs={tabs} selected={selected} onSelect={onSelect} />;
+}
+
+/**
  * A widget for Datamesh Connections.
  */
 export class DatameshConnectWidget extends ReactWidget {
@@ -1051,35 +1101,6 @@ export class DatameshConnectWidget extends ReactWidget {
   }
 
   render(): React.ReactElement {
-    const tabs: ITab[] = [
-      {
-        id: 'notebooks',
-        label: 'Notebooks',
-        render: () =>
-          this.props.auth ? (
-            <StoredNotebooks
-              auth={this.props.auth}
-              onOpen={item => this.props.openStoredNotebook?.(item.id)}
-            />
-          ) : (
-            <div className="oceanum-text-empty">
-              Oceanum.io sign-in is not configured for this host.
-            </div>
-          )
-      },
-      {
-        id: 'datamesh',
-        label: 'Datamesh',
-        render: () => this.renderDatamesh()
-      },
-      {
-        id: 'ai',
-        label: 'Oceanum AI',
-        render: () => (
-          <AIChatPanel commands={this.props.commands} settings={this.props} />
-        )
-      }
-    ];
     return (
       <div className="datamesh-connect">
         <header className="oceanum-sidebar-header">
@@ -1093,8 +1114,11 @@ export class DatameshConnectWidget extends ReactWidget {
         </header>
         <UseSignal signal={this.tabChanged} initialArgs={this.selectedTab}>
           {(): React.ReactElement => (
-            <Tabs
-              tabs={tabs}
+            <PanelTabs
+              auth={this.props.auth ?? null}
+              commands={this.props.commands}
+              settings={this.props}
+              renderDatamesh={() => this.renderDatamesh()}
               selected={this.selectedTab}
               onSelect={id => this.selectTab(id)}
             />
