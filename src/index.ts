@@ -183,9 +183,15 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       void stateDB.save(TAB_STATE_KEY, id);
     });
 
-    // First in the sidebar: on notebook.oceanum.io this panel is how a user reaches
-    // their stored notebooks, so it should not sit below the running-sessions widget.
-    app.shell.add(datameshConnectWidget, 'left', { rank: 50 });
+    // Rank has been chosen somewhat arbitrarily to give priority to the running
+    // sessions widget in the sidebar.
+    //
+    // Oceanum Notebook wants this panel first instead, but that is a property of that
+    // distribution rather than of the extension: in a plain JupyterLab the file browser
+    // is the primary navigation surface and displacing it would be a regression. A
+    // distribution moves it with JupyterLab's own shell user-layout settings, keyed on
+    // this widget's id, rather than this extension hard-coding one host's preference.
+    app.shell.add(datameshConnectWidget, 'left', { rank: 900 });
 
     app.commands.addCommand('datamesh-ui:open', {
       execute: (args: any) => {
