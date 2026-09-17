@@ -10,7 +10,6 @@
   "files": [
     "kernel/*.py",
     "lib/**/*.{js,d.ts}",
-    "schema/*.json",
     "style/**/*"
   ],
   "main": "lib/index.js",
@@ -60,7 +59,6 @@
   "jupyterlab": {
     "extension": true,
     "outputDir": "labextension",
-    "schemaDir": "schema",
     "webpackConfig": "./webpack.config.js",
     "sharedPackages": {
       "react": false,

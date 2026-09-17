@@ -241,7 +241,9 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
     // Signing in is a change, not a poll: it may run the token command once.
     oceanum.setSignedIn(true);
     await until(() => expect(chat(node)).not.toBeNull());
-    expect(oceanum.executed).toEqual([ACCESS_TOKEN_COMMAND]);
+    // Awaited: the chat renders before the token command resolves, so asserting straight
+    // after it appears is a race that a slow run loses.
+    await until(() => expect(oceanum.executed).toEqual([ACCESS_TOKEN_COMMAND]));
 
     await settle(2000);
     expect(oceanum.executed).toEqual([ACCESS_TOKEN_COMMAND]);
@@ -252,7 +254,8 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
     const node = mount(oceanum.commands);
 
     await until(() => expect(chat(node)).not.toBeNull());
-    expect(requests).toHaveLength(1);
+    // Awaited: the capabilities request resolves separately from the chat rendering.
+    await until(() => expect(requests).toHaveLength(1));
 
     // The host refreshed the token and told the registry, as it does.
     oceanum.setToken('refreshed-jwt');
@@ -268,12 +271,15 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
     const node = mount(oceanum.commands, { pasted: 'pasted-token' });
 
     await until(() => expect(chat(node)).not.toBeNull());
-    expect(requests).toEqual([
-      {
-        url: 'https://ai.oceanum.io/api/capabilities',
-        headers: { 'X-Datamesh-Token': 'pasted-token' }
-      }
-    ]);
+    // Awaited: the capabilities request resolves separately from the chat rendering.
+    await until(() =>
+      expect(requests).toEqual([
+        {
+          url: 'https://ai.oceanum.io/api/capabilities',
+          headers: { 'X-Datamesh-Token': 'pasted-token' }
+        }
+      ])
+    );
     expect(oceanum.executed).toEqual([]);
   });
 
@@ -287,12 +293,15 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
     const node = mount(oceanum.commands, { pasted: '' });
 
     await until(() => expect(chat(node)).not.toBeNull());
-    expect(requests).toEqual([
-      {
-        url: 'https://ai.oceanum.io/api/capabilities',
-        headers: { Authorization: 'Bearer a-jwt' }
-      }
-    ]);
+    // Awaited: the capabilities request resolves separately from the chat rendering.
+    await until(() =>
+      expect(requests).toEqual([
+        {
+          url: 'https://ai.oceanum.io/api/capabilities',
+          headers: { Authorization: 'Bearer a-jwt' }
+        }
+      ])
+    );
   });
 
   it('keeps the chat hidden when the capabilities say there is no code', async () => {

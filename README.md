@@ -28,26 +28,29 @@ Sign-in is off until an **environment** is configured. With none declared there 
 to sign in to, so no account control appears at all — that is the expected state on an
 ordinary JupyterLab, not a fault.
 
-Configure one under **Settings → Settings Editor → Oceanum.io sign-in**, or by writing
-`environments` to `@oceanum/auth-oceanum:plugin`:
+Environments are **server configuration, not a frontend setting** — which Auth0 tenant this
+notebook signs in to, and which Datamesh its kernels are handed credentials for, is the
+deployment's decision, and a user-editable setting could be pointed at someone else's. Put
+them in `jupyter_server_config.py`:
 
-```json
-{
-  "environments": [
+```python
+c.OceanumLab.environments = [
     {
-      "hosts": ["localhost", "my-lab.example.com"],
-      "auth0Domain": "auth.oceanum.io",
-      "clientId": "<the Auth0 SPA client id>",
-      "oceanumDomain": "oceanum.io",
-      "urls": {
-        "datamesh": "https://datamesh.oceanum.io",
-        "specs": "https://specs.oceanum.io",
-        "manage": "https://manage.oceanum.io"
-      }
+        "hosts": ["localhost", "my-lab.example.com"],
+        "auth0Domain": "auth.oceanum.io",
+        "clientId": "<the Auth0 SPA client id>",
+        "oceanumDomain": "oceanum.io",
+        "urls": {
+            "datamesh": "https://datamesh.oceanum.io",
+            "specs": "https://specs.oceanum.io",
+            "manage": "https://manage.oceanum.io",
+        },
     }
-  ]
-}
+]
 ```
+
+The server extension publishes these to the frontend through the page config, so they are
+readable by the page but not editable from it.
 
 Two things that cost time if you get them wrong:
 
@@ -56,11 +59,10 @@ Two things that cost time if you get them wrong:
 - The nav shows a spinner for a few seconds on first load while Auth0 is asked, silently,
   whether there is an existing session. A "Sign in" button after that means there was none.
 
-JupyterLite deployments are configured instead through `litePluginSettings` in
-`jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Native JupyterLab has no
-equivalent page option — `page_config.json` silently collapses a nested object to its keys —
-which is why it uses the settings registry. Both sources are read when both are present,
-settings first.
+JupyterLite deployments have no server, and are configured instead through
+`litePluginSettings` in `jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Both
+sources are read when both are present, the server's first. Note that `page_config.json` is
+not a third option: it silently collapses a nested object to its keys.
 
 ## Uninstall
 

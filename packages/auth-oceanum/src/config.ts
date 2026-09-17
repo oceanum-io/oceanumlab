@@ -3,6 +3,16 @@ import { IOceanumEnvironment, IOceanumServiceUrls } from './tokens';
 /** The plugin id under which `jupyter-lite.json` carries `litePluginSettings`. */
 export const PLUGIN_ID = '@oceanum/auth-oceanum:plugin';
 
+/**
+ * The page option a Jupyter server publishes its environments under, as a JSON array.
+ *
+ * Deliberately a page option rather than a plugin setting: which Auth0 tenant this notebook
+ * signs in to, and which Datamesh its kernels are given credentials for, is the deployment's
+ * decision. In the settings registry it would be user-editable, and a user could be talked
+ * into pasting someone else's tenant and service URLs.
+ */
+export const ENVIRONMENTS_OPTION = 'oceanumEnvironments';
+
 const URL_KEYS: readonly (keyof IOceanumServiceUrls)[] = [
   'datamesh',
   'specs',
@@ -118,11 +128,30 @@ export function parseEnvironments(raw: unknown): IOceanumEnvironment[] {
 }
 
 /**
+ * Read the environments from the `oceanumEnvironments` page option (a JSON array string),
+ * which oceanumlab's Jupyter server extension publishes from its own configuration.
+ */
+export function readEnvironmentsOption(
+  option: string | undefined
+): IOceanumEnvironment[] {
+  if (!option) {
+    return [];
+  }
+  try {
+    return parseEnvironments(JSON.parse(option));
+  } catch {
+    console.warn(`${PLUGIN_ID}: ignoring a malformed ${ENVIRONMENTS_OPTION}`);
+    return [];
+  }
+}
+
+/**
  * Read the environments from the `litePluginSettings` page option (a JSON string).
  *
- * This is how JupyterLite deployments are configured, through `jupyter-lite.json`. Native
- * JupyterLab has no equivalent -- its `page_config.json` silently collapses a nested object to
- * its keys -- so it is configured through the settings registry instead; see the plugin schema.
+ * This is how JupyterLite deployments are configured, through `jupyter-lite.json`. A native
+ * JupyterLab has a server, so it is configured there instead and reaches the page through
+ * `ENVIRONMENTS_OPTION`; its own `page_config.json` is no use, because it silently collapses a
+ * nested object to its keys.
  */
 export function readEnvironments(
   litePluginSettings: string | undefined

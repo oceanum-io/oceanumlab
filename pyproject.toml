@@ -62,7 +62,6 @@ exclude = [".github", "binder"]
 "packages/auth-oceanum/src" = "packages/auth-oceanum/src"
 "packages/auth-oceanum/kernel" = "packages/auth-oceanum/kernel"
 "packages/auth-oceanum/style" = "packages/auth-oceanum/style"
-"packages/auth-oceanum/schema" = "packages/auth-oceanum/schema"
 "packages/auth-oceanum/labextension" = "packages/auth-oceanum/labextension"
 "packages/auth-oceanum/package.json" = "packages/auth-oceanum/package.json"
 "packages/auth-oceanum/install.json" = "packages/auth-oceanum/install.json"
