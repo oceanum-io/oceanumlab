@@ -23,7 +23,12 @@ import {
   IColorSchemeManager,
   themeColorSchemeManager
 } from './colorScheme';
-import { PLUGIN_ID, readEnvironments, selectEnvironment } from './config';
+import {
+  offersSignIn,
+  PLUGIN_ID,
+  readEnvironments,
+  selectEnvironment
+} from './config';
 import {
   OCEANUMLAB_SETTINGS,
   URL_SETTINGS,
@@ -56,10 +61,10 @@ const authPlugin: JupyterFrontEndPlugin<IOceanumAuth> = {
     themes: IThemeManager | null
   ): IOceanumAuth => {
     const hostname = window.location.hostname;
-    const environment = selectEnvironment(
-      readEnvironments(PageConfig.getOption('litePluginSettings')),
-      hostname
+    const environments = readEnvironments(
+      PageConfig.getOption('litePluginSettings')
     );
+    const environment = selectEnvironment(environments, hostname);
     if (!environment) {
       console.info(`${PLUGIN_ID}: no Oceanum environment for ${hostname}`);
     }
@@ -87,19 +92,24 @@ const authPlugin: JupyterFrontEndPlugin<IOceanumAuth> = {
     ).href;
     const prefersDark = (): boolean =>
       window.matchMedia('(prefers-color-scheme: dark)').matches;
-    app.shell.add(
-      new NavWidget({
-        environment,
-        host: auth,
-        colorSchemeManager: themes
-          ? themeColorSchemeManager(themes, prefersDark)
-          : FIXED_LIGHT,
-        logoutRedirect,
-        hostname
-      }),
-      'top',
-      { rank: 1000 }
-    );
+    // NavWidget itself is never hidden: where sign-in is expected, a control that quietly
+    // vanishes reads as a bug rather than as "not available here". Whether there is anything
+    // to show at all is this caller's call -- see offersSignIn.
+    if (offersSignIn(environments)) {
+      app.shell.add(
+        new NavWidget({
+          environment,
+          host: auth,
+          colorSchemeManager: themes
+            ? themeColorSchemeManager(themes, prefersDark)
+            : FIXED_LIGHT,
+          logoutRedirect,
+          hostname
+        }),
+        'top',
+        { rank: 1000 }
+      );
+    }
     return auth;
   }
 };

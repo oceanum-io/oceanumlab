@@ -129,6 +129,22 @@ export function readEnvironments(
   return environments;
 }
 
+/**
+ * Whether this deployment offers Oceanum.io sign-in at all, and so whether the top bar should
+ * carry the account control.
+ *
+ * It turns on whether any environment is declared, not on whether one matched the page. A
+ * deployment that declares environments but none for this host is misconfigured, and the
+ * control says so rather than vanishing. A deployment that declares none is an ordinary
+ * JupyterLab, which oceanumlab ships to: sign-in was never on offer there, so a permanent
+ * "unavailable" notice would be noise on every install.
+ */
+export function offersSignIn(
+  environments: readonly IOceanumEnvironment[]
+): boolean {
+  return environments.length > 0;
+}
+
 /** The environment serving `hostname`, or `null` when sign-in is not configured for it. */
 export function selectEnvironment(
   environments: readonly IOceanumEnvironment[],

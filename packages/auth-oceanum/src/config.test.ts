@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { PLUGIN_ID, readEnvironments, selectEnvironment } from './config';
+import {
+  offersSignIn,
+  PLUGIN_ID,
+  readEnvironments,
+  selectEnvironment
+} from './config';
 
 const prod = {
   hosts: ['notebook.oceanum.io'],
@@ -114,5 +119,24 @@ describe('selectEnvironment', () => {
     expect(
       selectEnvironment(environments, 'notebook.oceanum.io.evil.example')
     ).toBeNull();
+  });
+});
+
+describe('offersSignIn', () => {
+  // Whether the account control reaches the top bar at all. Getting this wrong is visible on
+  // every install: oceanumlab ships to ordinary JupyterLab, which declares no environments,
+  // and a "Sign-in unavailable" notice there would be permanent noise.
+  it('says no when the deployment declares no environments', () => {
+    // What an ordinary JupyterLab yields: it sets no litePluginSettings at all.
+    expect(offersSignIn(readEnvironments(undefined))).toBe(false);
+    expect(offersSignIn([])).toBe(false);
+  });
+
+  it('says yes when environments are declared, even with none for this host', () => {
+    // Declared but unmatched is a misconfiguration, and the control has to be there to
+    // report it rather than silently vanishing.
+    const environments = readEnvironments(settings([prod]));
+    expect(selectEnvironment(environments, 'localhost')).toBeNull();
+    expect(offersSignIn(environments)).toBe(true);
   });
 });
