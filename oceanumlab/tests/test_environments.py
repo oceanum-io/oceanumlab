@@ -4,8 +4,11 @@ from oceanumlab import ENVIRONMENTS_OPTION, _publish_environments
 
 
 class _FakeLog:
-    def info(self, *args, **kwargs):
-        pass
+    def __init__(self):
+        self.messages = []
+
+    def info(self, message, *args, **kwargs):
+        self.messages.append(message)
 
 
 class _FakeWebApp:
@@ -66,6 +69,9 @@ def test_publishes_nothing_when_none_are_configured():
     _publish_environments(app)
 
     assert ENVIRONMENTS_OPTION not in app.web_app.settings.get("page_config_data", {})
+    # And it says so. Silence here is indistinguishable from the extension not being
+    # installed, and a config file that failed to parse also arrives here.
+    assert any("no Oceanum environments configured" in m for m in app.log.messages)
 
 
 def test_keeps_page_config_another_extension_already_set():

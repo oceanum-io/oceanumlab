@@ -82,6 +82,15 @@ def _publish_environments(server_app):
     """
     environments = OceanumLab(config=server_app.config).environments
     if not environments:
+        # Say so rather than returning in silence. With none configured the top bar carries
+        # no account control, which looks exactly like the extension not being installed;
+        # and a jupyter_server_config.py that failed to parse arrives here too, having
+        # logged its own error far enough earlier to be missed.
+        server_app.log.info(
+            "oceanumlab: no Oceanum environments configured, so Oceanum.io sign-in is off. "
+            "Set c.OceanumLab.environments in jupyter_server_config.py (Python, not JSON: "
+            "True, not true)."
+        )
         return
     page_config = server_app.web_app.settings.setdefault("page_config_data", {})
     page_config[ENVIRONMENTS_OPTION] = json.dumps(environments)

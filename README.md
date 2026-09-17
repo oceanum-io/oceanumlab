@@ -50,6 +50,14 @@ c.OceanumLab.environments = [
 ]
 ```
 
+**This file is Python, not JSON.** `signInRedirect` takes `True`, not `true`, so a block
+copied out of a JupyterLite `jupyter-lite.json` will not run as-is. Getting it wrong is
+quiet and expensive: traitlets logs `NameError: name 'true' is not defined` once at
+startup and then skips the **whole** config file, so sign-in stays unconfigured and the top
+bar simply shows nothing — which looks exactly like the extension not being installed.
+After editing, check the server's startup log for
+`oceanumlab: published N Oceanum environment(s)`.
+
 The server extension publishes these to the frontend through the page config, so they are
 readable by the page but not editable from it.
 
