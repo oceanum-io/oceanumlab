@@ -1,5 +1,15 @@
 [build-system]
-requires = ["hatchling>=1.5.0", "hatch-nodejs-version>=0.3.2", "jupyter-builder>=1.2.0,<2"]
+# hatchling is capped below 1.32.3: that release changed BuildHookInterface to take two
+# type parameters, and hatch-jupyter-builder still subscripts it with one
+# (hatch_jupyter_builder/plugin.py: `class JupyterBuildHook(BuildHookInterface[JupyterBuildConfig])`),
+# so every build dies in plugin discovery with "Too few arguments for BuildHookInterface".
+# Its latest release, 0.9.1, predates the change by two years, so there is nothing to upgrade
+# to. Lift the cap once hatch-jupyter-builder supports the new signature.
+requires = [
+    "hatchling>=1.5.0,<1.32.3",
+    "hatch-nodejs-version>=0.3.2",
+    "jupyter-builder>=1.2.0,<2",
+]
 build-backend = "hatchling.build"
 
 [project]
