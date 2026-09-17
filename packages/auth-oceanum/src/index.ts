@@ -304,6 +304,21 @@ const oceanumlabUrlsPlugin: JupyterFrontEndPlugin<void> = {
   }
 };
 
+/**
+ * The Oceanum sign-in plugins.
+ *
+ * The ids stay `@oceanum/auth-oceanum:*` because deployed `jupyter-lite.json` files key
+ * their `litePluginSettings` on them (see config.ts), and renaming would silently drop
+ * every environment table.
+ *
+ * The sharp edge, which moving this package into the oceanumlab repository widened:
+ * oceanum-notebook pins oceanumlab and still builds its own `@oceanum/auth-oceanum`
+ * labextension. The oceanumlab wheel now installs one under that same name, to the same
+ * path — `share/jupyter/labextensions/@oceanum/auth-oceanum`. Bumping the notebook's pin
+ * past this change therefore does not merely register these five ids twice; whichever
+ * extension is installed last overwrites the other. Retire the notebook's copy in the
+ * same change as the bump, not after it.
+ */
 const plugins: JupyterFrontEndPlugin<unknown>[] = [
   authPlugin,
   kernelPlugin,
