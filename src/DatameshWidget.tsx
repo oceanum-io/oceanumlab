@@ -479,7 +479,7 @@ interface IAiSettings {
    * Not `window.datameshToken`, which keeps a token after it is cleared.
    */
   datameshToken: () => string;
-  /** The `aiBackendUrl` setting. */
+  /** The deployment's Oceanum AI address. */
   aiBackendUrl: () => string;
   /** Emitted when the settings change. */
   settingsChanged: ISignal<unknown, void>;
@@ -496,7 +496,7 @@ interface IAiAccess {
   pasted: string;
   /** Whether the host can sign the user in to Oceanum.io on this site. */
   canSignIn: boolean;
-  /** The backend address, from the `aiBackendUrl` setting. */
+  /** The backend address: the deployment's Oceanum AI. */
   backend: string;
 }
 
@@ -945,13 +945,13 @@ export interface IDatameshWidgetProps {
   name: string;
   icon: LabIcon;
   openDatameshUI: any;
-  /** The `datameshUiUrl` setting. */
+  /** The deployment's Datamesh UI address. */
   datameshUiUrl: () => string;
   /** The Datamesh UI panel's iframe window; `null` when the panel is closed. */
   datameshUiFrame: () => Window | null;
   /** The `datameshToken` setting. */
   datameshToken: () => string;
-  /** The `aiBackendUrl` setting. */
+  /** The deployment's Oceanum AI address. */
   aiBackendUrl: () => string;
   /** Emitted when the settings change. */
   settingsChanged: ISignal<unknown, void>;

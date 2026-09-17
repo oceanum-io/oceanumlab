@@ -92,7 +92,13 @@ export class ChatRouter {
   constructor(
     private _settings: ISettingRegistry.ISettings,
     private _commands: AuthCommands,
-    private _notebook: () => Promise<INotebookSnapshot | null>
+    private _notebook: () => Promise<INotebookSnapshot | null>,
+    /**
+     * The Oceanum AI backend's address: the signed-in deployment's, or empty for the
+     * production default. Deployment configuration, not a setting -- a user-editable
+     * address is somewhere to send the user's credential.
+     */
+    private _backend: () => string = () => ''
   ) {}
 
   async route(
@@ -200,9 +206,7 @@ export class ChatRouter {
           : 'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
       );
     }
-    const backend = aiBackendUrl(
-      this._settings.get('aiBackendUrl').composite as string
-    );
+    const backend = aiBackendUrl(this._backend());
 
     let response: Response;
     try {

@@ -1,4 +1,3 @@
-import schema from '../../schema/datamesh-connect.json';
 import {
   ACCESS_TOKEN_COMMAND,
   SIGN_IN_COMMAND,
@@ -15,11 +14,11 @@ import { OCEANUM_AI_BACKEND_URL } from '../constants';
 import { validHttpUrl } from '../httpUrl';
 
 describe('aiBackendUrl', () => {
-  it('is the default the settings schema offers', () => {
-    expect(schema.properties.aiBackendUrl.default).toBe(OCEANUM_AI_BACKEND_URL);
-    expect(aiBackendUrl(schema.properties.aiBackendUrl.default)).toBe(
-      'https://ai.oceanum.io'
-    );
+  it('is production when the deployment names no address', () => {
+    // What index.ts passes when the sign-in environment has no `ai` URL, or there is no
+    // sign-in at all.
+    expect(aiBackendUrl('')).toBe(OCEANUM_AI_BACKEND_URL);
+    expect(aiBackendUrl(undefined)).toBe('https://ai.oceanum.io');
   });
 
   it.each([
