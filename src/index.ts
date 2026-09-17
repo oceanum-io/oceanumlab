@@ -21,8 +21,6 @@ import { ConversationPin } from './conversationPin';
 import { authPlugins } from './auth/plugin';
 import { IOceanumAuth } from './auth/tokens';
 
-/** share-oceanum's "open this spec store record" command, in the Notebook distribution. */
-const OPEN_STORED_NOTEBOOK = 'oceanum-share:open-id';
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
@@ -67,10 +65,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     restorer: ILayoutRestorer,
     status: ILabStatus,
     settingRegistry: ISettingRegistry,
-    // Named only to keep the positions aligned with `requires`: this plugin takes
-    // IStateDB but does not use it, and leaving the parameter out silently shifted
-    // every later argument along by one.
-    _stateDB: IStateDB,
+    stateDB: IStateDB,
     auth: IOceanumAuth | null
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
@@ -159,21 +154,34 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       settingsChanged,
       commands: app.commands,
       getCurrentWidget,
-      auth,
-      // share-oceanum registers this in the Oceanum Notebook distribution. Native
-      // JupyterLab has nothing that can open a spec store record until the drive in
-      // OCE-182, so the list stays read-only there rather than offering a dead click.
-      openStoredNotebook: app.commands.hasCommand(OPEN_STORED_NOTEBOOK)
-        ? (id: string): void => {
-            void app.commands.execute(OPEN_STORED_NOTEBOOK, { id });
-          }
-        : undefined
+      auth
+      // No `openStoredNotebook`: nothing can open a spec store record by id yet.
+      // share-oceanum has `oceanum-share:open`, but it takes no arguments — it opens
+      // its own picker — so there is nothing to hand an id to. Opening arrives with
+      // the drive in OCE-182, where the contents API makes it the ordinary path.
+      // Until then the list reads rather than offering a click that does nothing.
     });
     datameshConnectWidget.id = 'datamesh-connect';
     datameshConnectWidget.title.icon = oceanumIcon;
     datameshConnectWidget.title.caption = 'Datamesh Connect';
 
     restorer.add(datameshConnectWidget, 'datamesh-connect');
+
+    // The layout restorer restores the widget's place in the shell, not fields on it,
+    // so the chosen tab is kept here. Restoring is best effort: a missing or unreadable
+    // entry just leaves the default.
+    const TAB_STATE_KEY = `${PLUGIN_ID}:tab`;
+    void stateDB
+      .fetch(TAB_STATE_KEY)
+      .then(value => {
+        if (typeof value === 'string') {
+          datameshConnectWidget.selectTab(value);
+        }
+      })
+      .catch((): void => undefined);
+    datameshConnectWidget.tabChanged.connect((_, id) => {
+      void stateDB.save(TAB_STATE_KEY, id);
+    });
 
     // First in the sidebar: on notebook.oceanum.io this panel is how a user reaches
     // their stored notebooks, so it should not sit below the running-sessions widget.

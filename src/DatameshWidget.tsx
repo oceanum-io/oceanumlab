@@ -1104,7 +1104,11 @@ export class DatameshConnectWidget extends ReactWidget {
     );
   }
 
-  /** The visible tab. Restored with the widget, so a reload keeps the user's choice. */
+  /**
+   * The visible tab. The widget only holds it and announces changes through
+   * `tabChanged`; the plugin persists it in IStateDB, because the layout restorer
+   * restores a widget's place in the shell rather than fields on it.
+   */
   get selectedTab(): string {
     return this._selectedTab;
   }

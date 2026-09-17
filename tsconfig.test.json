@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig",
   "compilerOptions": {
-    "types": ["jest"]
+    // `node` so a spec can read a real asset off disk — Tabs.spec.tsx loads
+    // style/index.css to assert the stylesheet hides inactive panes, which asserting
+    // the `hidden` IDL property cannot.
+    "types": ["jest", "node"]
   }
 }

@@ -1,5 +1,7 @@
 import { ReactWidget } from '@jupyterlab/ui-components';
 import { Widget } from '@lumino/widgets';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import React from 'react';
 
 import { ITab, Tabs } from '../Tabs';
@@ -79,6 +81,27 @@ describe('Tabs', () => {
     expect(widget.node.textContent).toContain('second pane');
 
     widget.dispose();
+  });
+
+  it('the stylesheet actually hides them', async () => {
+    // `hidden` is only a hint: an author `display` on .oceanum-tabpanel overrides the
+    // user agent's `[hidden] { display: none }`, and asserting the IDL property above
+    // cannot see that. This renders the real stylesheet and asks for the computed value.
+    const css = readFileSync(
+      join(__dirname, '..', '..', 'style', 'index.css'),
+      'utf8'
+    );
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    const widget = await mount();
+    const [active, inactive] = panels(widget);
+    expect(getComputedStyle(active).display).not.toBe('none');
+    expect(getComputedStyle(inactive).display).toBe('none');
+
+    widget.dispose();
+    style.remove();
   });
 
   it('moves with the arrow keys, wrapping at both ends', async () => {

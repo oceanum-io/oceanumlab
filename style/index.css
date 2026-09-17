@@ -546,6 +546,13 @@
   overflow: auto;
 }
 
+/* Must come after the rule above: an author `display` beats the user agent's
+ * `[hidden] { display: none }`, so without this every pane renders at once and the
+ * tabs only move the underline. */
+.oceanum-tabpanel[hidden] {
+  display: none;
+}
+
 /* Stored notebooks (src/StoredNotebooks.tsx). */
 .oceanum-notebooks-heading {
   display: flex;
