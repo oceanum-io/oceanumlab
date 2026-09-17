@@ -25,6 +25,7 @@ import {
 } from './colorScheme';
 import {
   offersSignIn,
+  parseEnvironments,
   PLUGIN_ID,
   readEnvironments,
   selectEnvironment
@@ -55,15 +56,28 @@ const authPlugin: JupyterFrontEndPlugin<IOceanumAuth> = {
   description: 'Oceanum.io sign-in, through the Oceanum nav in the top bar.',
   autoStart: true,
   provides: IOceanumAuth,
-  optional: [IThemeManager],
-  activate: (
+  optional: [IThemeManager, ISettingRegistry],
+  activate: async (
     app: JupyterFrontEnd,
-    themes: IThemeManager | null
-  ): IOceanumAuth => {
+    themes: IThemeManager | null,
+    settings: ISettingRegistry | null
+  ): Promise<IOceanumAuth> => {
     const hostname = window.location.hostname;
-    const environments = readEnvironments(
-      PageConfig.getOption('litePluginSettings')
-    );
+    // Two sources, because the two hosts configure differently. JupyterLite deployments carry
+    // their environments in jupyter-lite.json; native JupyterLab has no equivalent page
+    // option, so it uses this plugin's settings (see schema/plugin.json). Settings come first
+    // so a locally configured environment wins over a baked-in one.
+    const configured = settings
+      ? await settings
+          .load(PLUGIN_ID)
+          .then(loaded => parseEnvironments(loaded.composite.environments))
+          // No schema on an older deployment, or the registry could not read it.
+          .catch(() => [])
+      : [];
+    const environments = [
+      ...configured,
+      ...readEnvironments(PageConfig.getOption('litePluginSettings'))
+    ];
     const environment = selectEnvironment(environments, hostname);
     if (!environment) {
       console.info(`${PLUGIN_ID}: no Oceanum environment for ${hostname}`);

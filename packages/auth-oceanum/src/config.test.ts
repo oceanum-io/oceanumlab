@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   offersSignIn,
+  parseEnvironments,
   PLUGIN_ID,
   readEnvironments,
   selectEnvironment
@@ -138,5 +139,26 @@ describe('offersSignIn', () => {
     const environments = readEnvironments(settings([prod]));
     expect(selectEnvironment(environments, 'localhost')).toBeNull();
     expect(offersSignIn(environments)).toBe(true);
+  });
+});
+
+describe('parseEnvironments', () => {
+  // Native JupyterLab configures this through the settings registry, which hands over an
+  // already-parsed value rather than the JSON string jupyter-lite.json carries. Both sources
+  // must validate identically, or a deployment could be accepted on one host and dropped on
+  // the other.
+  it('accepts the same environments the page option does', () => {
+    const viaSettings = parseEnvironments([prod]);
+    const viaPageOption = readEnvironments(settings([prod]));
+    expect(viaSettings).toEqual(viaPageOption);
+    expect(viaSettings[0].urls.datamesh).toBe('https://datamesh.oceanum.io');
+  });
+
+  it('drops invalid entries and anything that is not an array', () => {
+    expect(parseEnvironments([prod, { hosts: [] }, 'nonsense'])).toHaveLength(
+      1
+    );
+    expect(parseEnvironments(undefined)).toEqual([]);
+    expect(parseEnvironments({ environments: [prod] })).toEqual([]);
   });
 });

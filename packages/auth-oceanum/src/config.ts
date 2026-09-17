@@ -98,8 +98,31 @@ function parseEnvironment(raw: unknown): IOceanumEnvironment | null {
 }
 
 /**
+ * Parse an `environments` array from any source. Malformed entries are dropped rather than
+ * failing the whole extension, because one bad entry should not cost a deployment its sign-in.
+ */
+export function parseEnvironments(raw: unknown): IOceanumEnvironment[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const environments: IOceanumEnvironment[] = [];
+  for (const entry of raw) {
+    const environment = parseEnvironment(entry);
+    if (environment) {
+      environments.push(environment);
+    } else {
+      console.warn(`${PLUGIN_ID}: ignoring an invalid environment`, entry);
+    }
+  }
+  return environments;
+}
+
+/**
  * Read the environments from the `litePluginSettings` page option (a JSON string).
- * Malformed entries are dropped rather than failing the whole extension.
+ *
+ * This is how JupyterLite deployments are configured, through `jupyter-lite.json`. Native
+ * JupyterLab has no equivalent -- its `page_config.json` silently collapses a nested object to
+ * its keys -- so it is configured through the settings registry instead; see the plugin schema.
  */
 export function readEnvironments(
   litePluginSettings: string | undefined
@@ -114,19 +137,7 @@ export function readEnvironments(
     return [];
   }
   const settings = isRecord(parsed) ? parsed[PLUGIN_ID] : undefined;
-  if (!isRecord(settings) || !Array.isArray(settings.environments)) {
-    return [];
-  }
-  const environments: IOceanumEnvironment[] = [];
-  for (const raw of settings.environments) {
-    const environment = parseEnvironment(raw);
-    if (environment) {
-      environments.push(environment);
-    } else {
-      console.warn(`${PLUGIN_ID}: ignoring an invalid environment`, raw);
-    }
-  }
-  return environments;
+  return isRecord(settings) ? parseEnvironments(settings.environments) : [];
 }
 
 /**

@@ -19,6 +19,49 @@ To install the extension, execute:
 pip install oceanumlab
 ```
 
+## Oceanum.io sign-in
+
+The wheel ships two labextensions: `@oceanum/oceanumlab`, and `@oceanum/auth-oceanum`,
+which puts the Oceanum nav in the top bar and hands Datamesh credentials to every kernel.
+
+Sign-in is off until an **environment** is configured. With none declared there is nothing
+to sign in to, so no account control appears at all — that is the expected state on an
+ordinary JupyterLab, not a fault.
+
+Configure one under **Settings → Settings Editor → Oceanum.io sign-in**, or by writing
+`environments` to `@oceanum/auth-oceanum:plugin`:
+
+```json
+{
+  "environments": [
+    {
+      "hosts": ["localhost", "my-lab.example.com"],
+      "auth0Domain": "auth.oceanum.io",
+      "clientId": "<the Auth0 SPA client id>",
+      "oceanumDomain": "oceanum.io",
+      "urls": {
+        "datamesh": "https://datamesh.oceanum.io",
+        "specs": "https://specs.oceanum.io",
+        "manage": "https://manage.oceanum.io"
+      }
+    }
+  ]
+}
+```
+
+Two things that cost time if you get them wrong:
+
+- **`hosts` is matched against `window.location.hostname` exactly.** A page served from
+  `http://127.0.0.1:8888` does not match `localhost`, and vice versa.
+- The nav shows a spinner for a few seconds on first load while Auth0 is asked, silently,
+  whether there is an existing session. A "Sign in" button after that means there was none.
+
+JupyterLite deployments are configured instead through `litePluginSettings` in
+`jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Native JupyterLab has no
+equivalent page option — `page_config.json` silently collapses a nested object to its keys —
+which is why it uses the settings registry. Both sources are read when both are present,
+settings first.
+
 ## Uninstall
 
 To remove the extension, execute:
