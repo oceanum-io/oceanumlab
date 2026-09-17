@@ -18,6 +18,12 @@ import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
+// Provided at runtime by the sign-in labextension, which ships in the same wheel; never
+// bundled here (see jupyterlab.sharedPackages in package.json, which also pins the version
+// this expects). Deliberately absent from `dependencies`: @oceanum/auth-oceanum is not
+// published to npm, and naming it there makes `npm install @oceanum/oceanumlab` fail on a
+// 404 — which is what `jupyter-releaser check-npm` does. The yarn workspace supplies it for
+// builds and type-checking.
 import { IOceanumAuth } from '@oceanum/auth-oceanum';
 
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';

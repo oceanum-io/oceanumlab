@@ -199,12 +199,16 @@ describe('DatameshConnectWidget: Oceanum AI with the host sign-in', () => {
     oceanum.setSignedIn(true);
     await until(() => expect(chat(node)).not.toBeNull());
     expect(notice(node)).toBeNull();
-    expect(requests).toEqual([
-      {
-        url: 'https://ai.example.test/api/capabilities',
-        headers: { Authorization: 'Bearer a-jwt' }
-      }
-    ]);
+    // Also awaited: the chat renders before the capabilities call resolves, so asserting
+    // this straight after the chat appears is a race that a slow run loses.
+    await until(() =>
+      expect(requests).toEqual([
+        {
+          url: 'https://ai.example.test/api/capabilities',
+          headers: { Authorization: 'Bearer a-jwt' }
+        }
+      ])
+    );
     // One token request for the capabilities, however many components watch.
     expect(oceanum.accessToken).toHaveBeenCalledTimes(1);
 

@@ -52,6 +52,23 @@ fields = ["description", "authors", "urls"]
 artifacts = ["oceanumlab/labextension", "packages/auth-oceanum/labextension"]
 exclude = [".github", "binder"]
 
+# `python -m build` builds the wheel FROM the sdist, so the sdist has to carry everything
+# the sign-in extension needs to rebuild. Hatchling's default file selection drops
+# packages/auth-oceanum entirely -- a file directly under packages/ is picked up, and a
+# brand-new directory at the root is too, so it is this subtree specifically -- and listing
+# it under `artifacts` above does not rescue it. Name the paths, which also keeps
+# node_modules and lib out of the sdist rather than force-including the whole directory.
+[tool.hatch.build.targets.sdist.force-include]
+"packages/auth-oceanum/src" = "packages/auth-oceanum/src"
+"packages/auth-oceanum/kernel" = "packages/auth-oceanum/kernel"
+"packages/auth-oceanum/style" = "packages/auth-oceanum/style"
+"packages/auth-oceanum/labextension" = "packages/auth-oceanum/labextension"
+"packages/auth-oceanum/package.json" = "packages/auth-oceanum/package.json"
+"packages/auth-oceanum/install.json" = "packages/auth-oceanum/install.json"
+"packages/auth-oceanum/tsconfig.json" = "packages/auth-oceanum/tsconfig.json"
+"packages/auth-oceanum/webpack.config.js" = "packages/auth-oceanum/webpack.config.js"
+"packages/auth-oceanum/vitest.config.mts" = "packages/auth-oceanum/vitest.config.mts"
+
 [tool.hatch.build.targets.wheel.shared-data]
 "oceanumlab/labextension" = "share/jupyter/labextensions/@oceanum/oceanumlab"
 "install.json" = "share/jupyter/labextensions/@oceanum/oceanumlab/install.json"

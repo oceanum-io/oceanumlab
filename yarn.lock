@@ -3820,7 +3820,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@oceanum/auth-oceanum@^0.1.0, @oceanum/auth-oceanum@workspace:packages/auth-oceanum":
+"@oceanum/auth-oceanum@workspace:packages/auth-oceanum":
   version: 0.0.0-use.local
   resolution: "@oceanum/auth-oceanum@workspace:packages/auth-oceanum"
   dependencies:
@@ -3889,7 +3889,6 @@ __metadata:
     "@lumino/disposable": ^2.1.5
     "@lumino/signaling": ^2.1.5
     "@lumino/widgets": ^2.8.0
-    "@oceanum/auth-oceanum": ^0.1.0
     "@phosphor-icons/react": ^2.1.10
     "@types/jest": ^29.5.12
     "@types/json-schema": ^7.0.15

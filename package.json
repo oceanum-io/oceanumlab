@@ -84,7 +84,6 @@
     "devDependencies": {
         "@jupyter/builder": "^1.2.3",
         "@jupyterlab/testutils": "^4.6.3",
-        "@oceanum/auth-oceanum": "^0.1.0",
         "@types/jest": "^29.5.12",
         "@types/json-schema": "^7.0.15",
         "@types/react": "^18.2.75",
@@ -125,7 +124,8 @@
         "sharedPackages": {
             "@oceanum/auth-oceanum": {
                 "bundled": false,
-                "singleton": true
+                "singleton": true,
+                "requiredVersion": "^0.1.0"
             }
         }
     },
