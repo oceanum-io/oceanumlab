@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ENVIRONMENTS_OPTION,
   offersSignIn,
+  parseEnvironments,
   PLUGIN_ID,
   readEnvironments,
+  readEnvironmentsOption,
   selectEnvironment
 } from './config';
 
@@ -138,5 +141,45 @@ describe('offersSignIn', () => {
     const environments = readEnvironments(settings([prod]));
     expect(selectEnvironment(environments, 'localhost')).toBeNull();
     expect(offersSignIn(environments)).toBe(true);
+  });
+});
+
+describe('parseEnvironments', () => {
+  it('drops invalid entries and anything that is not an array', () => {
+    expect(parseEnvironments([prod, { hosts: [] }, 'nonsense'])).toHaveLength(
+      1
+    );
+    expect(parseEnvironments(undefined)).toEqual([]);
+    expect(parseEnvironments({ environments: [prod] })).toEqual([]);
+  });
+});
+
+describe('readEnvironmentsOption', () => {
+  it('reads the page option name the server publishes under', () => {
+    // oceanumlab's server extension writes this literal (ENVIRONMENTS_OPTION in
+    // oceanumlab/__init__.py, pinned by its own test). Renaming either side alone would
+    // silently stop every deployment's environments reaching the page.
+    expect(ENVIRONMENTS_OPTION).toBe('oceanumEnvironments');
+  });
+
+  // What a native JupyterLab uses: the server extension publishes this page option from
+  // jupyter_server_config, so the environments are never a user-editable setting. It must
+  // validate identically to the JupyterLite source, or a deployment could be accepted on one
+  // host and silently dropped on the other.
+  it('accepts the same environments the JupyterLite page option does', () => {
+    const viaServer = readEnvironmentsOption(JSON.stringify([prod]));
+    const viaLite = readEnvironments(settings([prod]));
+    expect(viaServer).toEqual(viaLite);
+    expect(viaServer[0].urls.datamesh).toBe('https://datamesh.oceanum.io');
+  });
+
+  it('returns nothing for a missing or malformed option', () => {
+    expect(readEnvironmentsOption(undefined)).toEqual([]);
+    expect(readEnvironmentsOption('')).toEqual([]);
+    expect(readEnvironmentsOption('not json')).toEqual([]);
+    // An object rather than the array the server publishes.
+    expect(
+      readEnvironmentsOption(JSON.stringify({ environments: [prod] }))
+    ).toEqual([]);
   });
 });

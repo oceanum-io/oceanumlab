@@ -24,9 +24,11 @@ import {
   themeColorSchemeManager
 } from './colorScheme';
 import {
+  ENVIRONMENTS_OPTION,
   offersSignIn,
   PLUGIN_ID,
   readEnvironments,
+  readEnvironmentsOption,
   selectEnvironment
 } from './config';
 import {
@@ -61,9 +63,13 @@ const authPlugin: JupyterFrontEndPlugin<IOceanumAuth> = {
     themes: IThemeManager | null
   ): IOceanumAuth => {
     const hostname = window.location.hostname;
-    const environments = readEnvironments(
-      PageConfig.getOption('litePluginSettings')
-    );
+    // Two sources, because the two hosts configure differently, and neither is a user setting:
+    // a JupyterLite deployment carries its environments in jupyter-lite.json, and a native
+    // JupyterLab has a server, which publishes them from jupyter_server_config.
+    const environments = [
+      ...readEnvironmentsOption(PageConfig.getOption(ENVIRONMENTS_OPTION)),
+      ...readEnvironments(PageConfig.getOption('litePluginSettings'))
+    ];
     const environment = selectEnvironment(environments, hostname);
     if (!environment) {
       console.info(`${PLUGIN_ID}: no Oceanum environment for ${hostname}`);

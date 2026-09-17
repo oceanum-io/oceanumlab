@@ -8,8 +8,8 @@
     "jupyterlab-extension"
   ],
   "files": [
-    "lib/**/*.{js,d.ts}",
     "kernel/*.py",
+    "lib/**/*.{js,d.ts}",
     "style/**/*"
   ],
   "main": "lib/index.js",

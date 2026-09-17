@@ -3,6 +3,16 @@ import { IOceanumEnvironment, IOceanumServiceUrls } from './tokens';
 /** The plugin id under which `jupyter-lite.json` carries `litePluginSettings`. */
 export const PLUGIN_ID = '@oceanum/auth-oceanum:plugin';
 
+/**
+ * The page option a Jupyter server publishes its environments under, as a JSON array.
+ *
+ * Deliberately a page option rather than a plugin setting: which Auth0 tenant this notebook
+ * signs in to, and which Datamesh its kernels are given credentials for, is the deployment's
+ * decision. In the settings registry it would be user-editable, and a user could be talked
+ * into pasting someone else's tenant and service URLs.
+ */
+export const ENVIRONMENTS_OPTION = 'oceanumEnvironments';
+
 const URL_KEYS: readonly (keyof IOceanumServiceUrls)[] = [
   'datamesh',
   'specs',
@@ -98,8 +108,50 @@ function parseEnvironment(raw: unknown): IOceanumEnvironment | null {
 }
 
 /**
+ * Parse an `environments` array from any source. Malformed entries are dropped rather than
+ * failing the whole extension, because one bad entry should not cost a deployment its sign-in.
+ */
+export function parseEnvironments(raw: unknown): IOceanumEnvironment[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const environments: IOceanumEnvironment[] = [];
+  for (const entry of raw) {
+    const environment = parseEnvironment(entry);
+    if (environment) {
+      environments.push(environment);
+    } else {
+      console.warn(`${PLUGIN_ID}: ignoring an invalid environment`, entry);
+    }
+  }
+  return environments;
+}
+
+/**
+ * Read the environments from the `oceanumEnvironments` page option (a JSON array string),
+ * which oceanumlab's Jupyter server extension publishes from its own configuration.
+ */
+export function readEnvironmentsOption(
+  option: string | undefined
+): IOceanumEnvironment[] {
+  if (!option) {
+    return [];
+  }
+  try {
+    return parseEnvironments(JSON.parse(option));
+  } catch {
+    console.warn(`${PLUGIN_ID}: ignoring a malformed ${ENVIRONMENTS_OPTION}`);
+    return [];
+  }
+}
+
+/**
  * Read the environments from the `litePluginSettings` page option (a JSON string).
- * Malformed entries are dropped rather than failing the whole extension.
+ *
+ * This is how JupyterLite deployments are configured, through `jupyter-lite.json`. A native
+ * JupyterLab has a server, so it is configured there instead and reaches the page through
+ * `ENVIRONMENTS_OPTION`; its own `page_config.json` is no use, because it silently collapses a
+ * nested object to its keys.
  */
 export function readEnvironments(
   litePluginSettings: string | undefined
@@ -114,19 +166,7 @@ export function readEnvironments(
     return [];
   }
   const settings = isRecord(parsed) ? parsed[PLUGIN_ID] : undefined;
-  if (!isRecord(settings) || !Array.isArray(settings.environments)) {
-    return [];
-  }
-  const environments: IOceanumEnvironment[] = [];
-  for (const raw of settings.environments) {
-    const environment = parseEnvironment(raw);
-    if (environment) {
-      environments.push(environment);
-    } else {
-      console.warn(`${PLUGIN_ID}: ignoring an invalid environment`, raw);
-    }
-  }
-  return environments;
+  return isRecord(settings) ? parseEnvironments(settings.environments) : [];
 }
 
 /**

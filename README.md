@@ -19,6 +19,54 @@ To install the extension, execute:
 pip install oceanumlab
 ```
 
+## Oceanum.io sign-in
+
+The wheel ships two labextensions: `@oceanum/oceanumlab`, and `@oceanum/auth-oceanum`,
+which puts the Oceanum nav in the top bar and hands Datamesh credentials to every kernel.
+
+Sign-in is off until an **environment** is configured. With none declared there is nothing
+to sign in to, so no account control appears at all — that is the expected state on an
+ordinary JupyterLab, not a fault.
+
+Environments are **server configuration, not a frontend setting** — which Auth0 tenant this
+notebook signs in to, and which Datamesh its kernels are handed credentials for, is the
+deployment's decision, and a user-editable setting could be pointed at someone else's. Put
+them in `jupyter_server_config.py` — `~/.jupyter/` for one user, or `etc/jupyter/` under the
+environment prefix for everyone using it; `jupyter --paths` lists both:
+
+```python
+c.OceanumLab.environments = [
+    {
+        "hosts": ["localhost", "my-lab.example.com"],
+        "auth0Domain": "auth.oceanum.io",
+        "clientId": "<the Auth0 SPA client id>",
+        "oceanumDomain": "oceanum.io",
+        "urls": {
+            "datamesh": "https://datamesh.oceanum.io",
+            "specs": "https://specs.oceanum.io",
+            "manage": "https://manage.oceanum.io",
+        },
+    }
+]
+```
+
+The server extension publishes these to the frontend through the page config, so they are
+readable by the page but not editable from it.
+
+Two things that cost time if you get them wrong:
+
+- **`hosts` is matched against `window.location.hostname` exactly.** A page served from
+  `http://127.0.0.1:8888` does not match `localhost`, and vice versa.
+- The nav shows a spinner on first load while Auth0 is asked, silently, whether there is an
+  existing session. This took around half a minute in testing, so give it longer than feels
+  reasonable before concluding it is broken. A "Sign in" button after that means there was
+  no session, which is the normal signed-out result.
+
+JupyterLite deployments have no server, and are configured instead through
+`litePluginSettings` in `jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Both
+sources are read when both are present, the server's first. Note that `page_config.json` is
+not a third option: it silently collapses a nested object to its keys.
+
 ## Uninstall
 
 To remove the extension, execute:
