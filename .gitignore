@@ -8,7 +8,6 @@ node_modules/
 .ipynb_checkpoints
 *.tsbuildinfo
 oceanumlab/labextension
-packages/auth-oceanum/labextension
 # Version file is handled by hatchling
 oceanumlab/_version.py
 

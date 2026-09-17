@@ -21,7 +21,7 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
-import { IOceanumAuth } from '@oceanum/auth-oceanum';
+import { IOceanumAuth } from './auth/tokens';
 import { StoredNotebooks } from './StoredNotebooks';
 import { ITab, Tabs } from './Tabs';
 import {
@@ -993,7 +993,9 @@ function PanelTabs({
       id: 'notebooks',
       label: 'Notebooks',
       render: () =>
-        auth ? (
+        // An auth with no environment is a provider that has nothing to sign in to (the
+        // server has sign-in turned off). Asking the user to sign in would be a dead end.
+        auth?.environment ? (
           <StoredNotebooks auth={auth} />
         ) : (
           <div className="oceanum-text-empty">

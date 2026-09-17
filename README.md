@@ -21,59 +21,59 @@ pip install oceanumlab
 
 ## Oceanum.io sign-in
 
-The wheel ships two labextensions: `@oceanum/oceanumlab`, and `@oceanum/auth-oceanum`,
-which puts the Oceanum nav in the top bar and hands Datamesh credentials to every kernel.
+A **Sign in to Oceanum.io** control sits in the top bar. Signing in gives the Notebooks tab
+your stored notebooks and lets Oceanum AI act as you, with no Datamesh token to paste.
 
-Sign-in is off until an **environment** is configured. With none declared there is nothing
-to sign in to, so no account control appears at all — that is the expected state on an
-ordinary JupyterLab, not a fault.
+It uses the OAuth **device grant**, run by oceanumlab's Jupyter server extension: click
+**Sign in**, open the link it shows, check the code matches, and sign in on Oceanum.io as
+usual. The dialog closes by itself when you are done. It works with no configuration, and
+from any address — `localhost` on any port, a JupyterHub, a remote server.
 
-Environments are **server configuration, not a frontend setting** — which Auth0 tenant this
-notebook signs in to, and which Datamesh its kernels are handed credentials for, is the
-deployment's decision, and a user-editable setting could be pointed at someone else's. Put
-them in `jupyter_server_config.py` — `~/.jupyter/` for one user, or `etc/jupyter/` under the
-environment prefix for everyone using it; `jupyter --paths` lists both:
+That last point is why it works this way. A browser sign-in (a popup, a redirect, the
+Oceanum widget) has to tell Auth0 which page to return to, Auth0 only accepts addresses
+registered in advance, and it cannot wildcard a port or an arbitrary host. A JupyterLab's
+address is not knowable ahead of time, so on anything but Oceanum's own sites a browser
+sign-in fails with "Callback URL mismatch". The device grant has no callback.
+
+The refresh token stays in the Jupyter server's memory and never reaches the page or the
+disk, so restarting the server signs you out.
+
+### Configuration
+
+Sign-in is server configuration, not a frontend setting: which Auth0 tenant a notebook signs
+in to, and which services its tokens are sent to, is the deployment's decision, and a
+user-editable setting could be pointed at someone else's. In `jupyter_server_config.py` —
+`~/.jupyter/` for one user, or `etc/jupyter/` under the environment prefix for everyone
+using it; `jupyter --paths` lists both:
 
 ```python
-c.OceanumLab.environments = [
-    {
-        "hosts": ["localhost", "my-lab.example.com"],
-        "auth0Domain": "auth.oceanum.io",
-        "clientId": "<the Auth0 SPA client id>",
-        "oceanumDomain": "oceanum.io",
-        "urls": {
-            "datamesh": "https://datamesh.oceanum.io",
-            "specs": "https://specs.oceanum.io",
-            "manage": "https://manage.oceanum.io",
-        },
-    }
-]
+c.OceanumLab.sign_in = "off"        # "device" is the default
 ```
 
-**This file is Python, not JSON.** `signInRedirect` takes `True`, not `true`, so a block
-copied out of a JupyterLite `jupyter-lite.json` will not run as-is. Getting it wrong is
-quiet and expensive: traitlets logs `NameError: name 'true' is not defined` once at
-startup and then skips the **whole** config file, so sign-in stays unconfigured and the top
-bar simply shows nothing — which looks exactly like the extension not being installed.
-After editing, check the server's startup log for
-`oceanumlab: published N Oceanum environment(s)`.
+To sign in to a deployment other than Oceanum production, replace the environment whole:
 
-The server extension publishes these to the frontend through the page config, so they are
-readable by the page but not editable from it.
+```python
+c.OceanumLab.device_environment = {
+    "auth0Domain": "auth.example.org",
+    "clientId": "<an Auth0 Native application with the Device Code grant>",
+    "audience": "",
+    "oceanumDomain": "example.org",
+    "urls": {
+        "datamesh": "https://datamesh.example.org",
+        "specs": "https://specs.example.org",
+        "manage": "https://manage.example.org",
+    },
+}
+```
 
-Two things that cost time if you get them wrong:
+**This file is Python, not JSON** — `True`, not `true`. A syntax error there is quiet and
+expensive: traitlets logs it once at startup and then skips the **whole** file, so the
+setting silently does not apply. Check the server's startup log for
+`oceanumlab: Oceanum.io sign-in by device code`.
 
-- **`hosts` is matched against `window.location.hostname` exactly.** A page served from
-  `http://127.0.0.1:8888` does not match `localhost`, and vice versa.
-- The nav shows a spinner on first load while Auth0 is asked, silently, whether there is an
-  existing session. This took around half a minute in testing, so give it longer than feels
-  reasonable before concluding it is broken. A "Sign in" button after that means there was
-  no session, which is the normal signed-out result.
-
-JupyterLite deployments have no server, and are configured instead through
-`litePluginSettings` in `jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Both
-sources are read when both are present, the server's first. Note that `page_config.json` is
-not a third option: it silently collapses a nested object to its keys.
+notebook.oceanum.io is a JupyterLite site with no Jupyter server, so none of this applies
+there. It signs in with the Oceanum widget, from its own extension, and lists
+`@oceanum/oceanumlab:device-auth` under `disabledExtensions`.
 
 ## Uninstall
 

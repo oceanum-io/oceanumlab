@@ -2,7 +2,7 @@ import { Token } from '@lumino/coreutils';
 import { ISignal } from '@lumino/signaling';
 
 /**
- * One Oceanum deployment (production or development), selected by page hostname.
+ * One Oceanum deployment (production or development).
  */
 export interface IOceanumEnvironment {
   /** Page hostnames served by this environment, e.g. `notebook.oceanum.io`. */
@@ -77,12 +77,12 @@ export interface IOceanumAuth {
   /** Emits the new access token (or `null`) whenever it changes, including refreshes. */
   readonly tokenChanged: ISignal<IOceanumAuth, string | null>;
   /**
-   * Start sign-in, in a popup: the page and its kernels survive it. Resolves once sign-in has
+   * Start sign-in without leaving the page, so its kernels survive. Resolves once sign-in has
    * started, not when it completes; watch `userChanged` for the result. Does nothing while a
    * user is signed in.
    */
   signIn(): Promise<void>;
-  /** Sign out of Oceanum.io and clear the session. The page navigates to sign out. */
+  /** Sign out of Oceanum.io and clear the session. */
   signOut(): Promise<void>;
   /**
    * A current access token, refreshed if it is near expiry, or `null` when signed out.
@@ -91,7 +91,14 @@ export interface IOceanumAuth {
   getAccessToken(): Promise<string | null>;
 }
 
+/**
+ * The sign-in contract. oceanumlab owns it and exports it from its package entry, because a
+ * Lumino token is matched by object identity: every extension that provides or consumes it
+ * has to import this one object, which JupyterLab arranges by sharing `@oceanum/oceanumlab`
+ * as a singleton module. On an ordinary JupyterLab oceanumlab's own device sign-in provides
+ * it; on notebook.oceanum.io the notebook's Oceanum widget extension does.
+ */
 export const IOceanumAuth = new Token<IOceanumAuth>(
-  '@oceanum/auth-oceanum:IOceanumAuth',
+  '@oceanum/oceanumlab:IOceanumAuth',
   'Oceanum.io sign-in state and Datamesh access tokens.'
 );

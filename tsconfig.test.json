@@ -4,18 +4,6 @@
     // `node` so a spec can read a real asset off disk — Tabs.spec.tsx loads
     // style/index.css to assert the stylesheet hides inactive panes, which asserting
     // the `hidden` IDL property cannot.
-    "types": ["jest", "node"],
-    // Wider than the build's `src`, so ts-jest can also compile the sign-in contract
-    // that jest.config.js maps @oceanum/auth-oceanum to. Test-only: the build still
-    // uses tsconfig.json.
-    "rootDir": ".",
-    // Resolve the sign-in contract to source, matching jest.config.js's moduleNameMapper.
-    // Without this, TypeScript follows the package's `types` to packages/auth-oceanum/lib,
-    // which only exists once that package has been built — so the suite passed locally
-    // after a build and failed in CI, which tests without one.
-    "baseUrl": ".",
-    "paths": {
-      "@oceanum/auth-oceanum": ["packages/auth-oceanum/src/tokens"]
-    }
+    "types": ["jest", "node"]
   }
 }
