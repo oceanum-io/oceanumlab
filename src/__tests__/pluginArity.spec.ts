@@ -1,7 +1,3 @@
-// The kernel bootstrap is inlined by a webpack asset/source rule, which jest has no
-// equivalent for; `virtual` stands in for a module jest cannot resolve.
-jest.mock('../../kernel/bootstrap.py', () => 'BOOTSTRAP', { virtual: true });
-
 import plugins from '../index';
 
 /**

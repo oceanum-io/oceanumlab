@@ -7,5 +7,9 @@ tests
 **/__tests__
 ui-tests
 
+# The sign-in extension's tests sit beside its source rather than in __tests__.
+packages/auth-oceanum/src/*.test.ts
+
 # Built labextension output; nothing there is source.
 oceanumlab/labextension
+packages/auth-oceanum/labextension

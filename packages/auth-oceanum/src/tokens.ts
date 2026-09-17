@@ -11,8 +11,20 @@ export interface IOceanumEnvironment {
   readonly auth0Domain: string;
   /** Auth0 SPA client id. */
   readonly clientId: string;
+  /**
+   * The Oceanum apps domain, e.g. `oceanum.io`. The Oceanum nav builds its app, account,
+   * docs and sign-out URLs from it (`https://platform.oceanum.io/account`, ...).
+   */
+  readonly oceanumDomain: string;
   /** Service base URLs for this environment. */
   readonly urls: IOceanumServiceUrls;
+  /**
+   * Whether to check for an existing Oceanum.io session with a full-page redirect when the
+   * silent iframe check finds none. Only for a tenant on another site than the notebook
+   * (browsers that block third-party cookies hide the session from the iframe), and only where
+   * the site origin is an allowed callback URL.
+   */
+  readonly signInRedirect: boolean;
 }
 
 /** Service base URLs for an environment, without trailing slashes. */
@@ -23,6 +35,16 @@ export interface IOceanumServiceUrls {
   readonly specs: string;
   /** User management service (Auth0 user metadata), e.g. `https://manage.oceanum.io`. */
   readonly manage: string;
+  /**
+   * Datamesh UI, e.g. `https://ui.datamesh.oceanum.io`, shown by oceanumlab's Datamesh panel.
+   * Optional: without it, oceanumlab's own setting applies.
+   */
+  readonly datameshUi?: string;
+  /**
+   * Oceanum AI backend, e.g. `https://ai.oceanum.io`, called by oceanumlab's AI chat.
+   * Optional: without it, oceanumlab's own setting applies.
+   */
+  readonly ai?: string;
 }
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
@@ -54,9 +76,13 @@ export interface IOceanumAuth {
   readonly userChanged: ISignal<IOceanumAuth, IOceanumUser | null>;
   /** Emits the new access token (or `null`) whenever it changes, including refreshes. */
   readonly tokenChanged: ISignal<IOceanumAuth, string | null>;
-  /** Start the Auth0 login redirect. */
+  /**
+   * Start sign-in, in a popup: the page and its kernels survive it. Resolves once sign-in has
+   * started, not when it completes; watch `userChanged` for the result. Does nothing while a
+   * user is signed in.
+   */
   signIn(): Promise<void>;
-  /** Sign out of Oceanum.io and clear the session. */
+  /** Sign out of Oceanum.io and clear the session. The page navigates to sign out. */
   signOut(): Promise<void>;
   /**
    * A current access token, refreshed if it is near expiry, or `null` when signed out.

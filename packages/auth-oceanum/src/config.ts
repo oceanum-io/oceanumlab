@@ -9,6 +9,12 @@ const URL_KEYS: readonly (keyof IOceanumServiceUrls)[] = [
   'manage'
 ];
 
+/** Service URLs an environment may leave out; an invalid one is ignored. */
+const OPTIONAL_URL_KEYS: readonly (keyof IOceanumServiceUrls)[] = [
+  'datameshUi',
+  'ai'
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -31,17 +37,31 @@ function parseUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * A bare domain such as `oceanum.io`: URLs are built as `https://prax.${domain}/...`, so a
+ * scheme, port, path or leading dot would produce broken or unintended URLs.
+ */
+function isDomain(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(
+      value
+    )
+  );
+}
+
 function parseEnvironment(raw: unknown): IOceanumEnvironment | null {
   if (!isRecord(raw) || !isRecord(raw.urls) || !Array.isArray(raw.hosts)) {
     return null;
   }
-  const { auth0Domain, clientId } = raw;
+  const { auth0Domain, clientId, oceanumDomain } = raw;
   const hosts = raw.hosts
     .filter(nonEmptyString)
     .map(host => host.toLowerCase());
   if (
     !nonEmptyString(auth0Domain) ||
     !nonEmptyString(clientId) ||
+    !isDomain(oceanumDomain) ||
     hosts.length === 0
   ) {
     return null;
@@ -54,7 +74,27 @@ function parseEnvironment(raw: unknown): IOceanumEnvironment | null {
     }
     urls[key] = url;
   }
-  return { hosts, auth0Domain, clientId, urls: urls as IOceanumServiceUrls };
+  for (const key of OPTIONAL_URL_KEYS) {
+    if (raw.urls[key] !== undefined) {
+      const url = parseUrl(raw.urls[key]);
+      if (url) {
+        urls[key] = url;
+      } else {
+        console.warn(
+          `${PLUGIN_ID}: ignoring an invalid urls.${key}`,
+          raw.urls[key]
+        );
+      }
+    }
+  }
+  return {
+    hosts,
+    auth0Domain,
+    clientId,
+    oceanumDomain: oceanumDomain.toLowerCase(),
+    urls: urls as IOceanumServiceUrls,
+    signInRedirect: raw.signInRedirect === true
+  };
 }
 
 /**
@@ -87,6 +127,22 @@ export function readEnvironments(
     }
   }
   return environments;
+}
+
+/**
+ * Whether this deployment offers Oceanum.io sign-in at all, and so whether the top bar should
+ * carry the account control.
+ *
+ * It turns on whether any environment is declared, not on whether one matched the page. A
+ * deployment that declares environments but none for this host is misconfigured, and the
+ * control says so rather than vanishing. A deployment that declares none is an ordinary
+ * JupyterLab, which oceanumlab ships to: sign-in was never on offer there, so a permanent
+ * "unavailable" notice would be noise on every install.
+ */
+export function offersSignIn(
+  environments: readonly IOceanumEnvironment[]
+): boolean {
+  return environments.length > 0;
 }
 
 /** The environment serving `hostname`, or `null` when sign-in is not configured for it. */

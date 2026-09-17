@@ -32,10 +32,21 @@ module.exports = {
   ],
   coverageReporters: ['lcov', 'text'],
   testRegex: 'src/.*/.*.spec.ts[x]?$',
-  // The built labextension contains a COPY of package.json, so jest sees two
-  // modules both named @oceanum/oceanumlab and warns about a haste collision on
-  // every run. It is gitignored build output, not source, and nothing here
-  // should be resolved out of it.
-  modulePathIgnorePatterns: ['<rootDir>/oceanumlab/labextension/'],
+  // Crawl source only. Each built labextension contains a COPY of its package.json,
+  // so a default crawl indexes two packages under each name; the haste map then
+  // cannot resolve that name at all, and `import '@oceanum/auth-oceanum'` in
+  // src/index.ts fails outright once packages/auth-oceanum has been built.
+  // `modulePathIgnorePatterns` does not help — it filters resolution, not the haste
+  // map, which is why the @oceanum/oceanumlab collision it was added for was only
+  // ever silenced by nothing importing that name.
+  roots: ['<rootDir>/src', '<rootDir>/packages/auth-oceanum/src'],
+  moduleNameMapper: {
+    ...baseConfig.moduleNameMapper,
+    // Only the sign-in contract: the package's entry point pulls in the Oceanum
+    // nav's React 19 and Mantine, which this suite has no transforms for and no
+    // use for. Importing anything else from it here fails loudly rather than
+    // silently resolving.
+    '^@oceanum/auth-oceanum$': '<rootDir>/packages/auth-oceanum/src/tokens.ts'
+  },
   transformIgnorePatterns: [`/node_modules/(?!${esModules}).+`]
 };

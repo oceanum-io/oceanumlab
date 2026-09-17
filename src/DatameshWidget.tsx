@@ -21,7 +21,7 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
-import { IOceanumAuth } from './auth/tokens';
+import { IOceanumAuth } from '@oceanum/auth-oceanum';
 import { StoredNotebooks } from './StoredNotebooks';
 import { ITab, Tabs } from './Tabs';
 import {

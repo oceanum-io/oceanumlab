@@ -1,9 +1,10 @@
 import { Signal } from '@lumino/signaling';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ISessionContext } from '@jupyterlab/apputils';
 import type { Kernel } from '@jupyterlab/services';
 
-import { KernelCredentialBridge } from '../auth/bridge';
+import { KernelCredentialBridge } from './bridge';
 
 class FakeKernel {
   status: Kernel.Status = 'idle';
@@ -12,7 +13,7 @@ class FakeKernel {
   disposed = new Signal<FakeKernel, void>(this);
   /** Mirrors KernelConnection: a 'restarting' status is emitted before the queue is cleared. */
   queue: string[] = [];
-  requestExecute = jest.fn(
+  requestExecute = vi.fn(
     (content: { code: string; silent: boolean; store_history: boolean }) => {
       this.queue.push(content.code);
       return { done: Promise.resolve() };
@@ -127,7 +128,7 @@ describe('KernelCredentialBridge', () => {
   });
 
   it('does not let a code error escape into JupyterLab', () => {
-    const error = jest
+    const error = vi
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
     const bridge = new KernelCredentialBridge(() => {
