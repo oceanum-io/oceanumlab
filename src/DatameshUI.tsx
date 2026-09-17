@@ -3,18 +3,9 @@ import { ReactWidget } from '@jupyterlab/apputils';
 import { datameshUiSrc } from './datameshUiUrl';
 
 export class DatameshUI extends ReactWidget {
-  /** `url` is the `datameshUiUrl` setting. */
+  /** `url` is the deployment's Datamesh UI address (the sign-in environment's). */
   constructor(private _url: string) {
     super();
-  }
-
-  /**
-   * Point the panel at the `datameshUiUrl` setting's new value. The iframe
-   * reloads only if its address actually changes.
-   */
-  set url(url: string) {
-    this._url = url;
-    this.update();
   }
 
   /** The iframe's window, for telling its messages apart; `null` if none. */

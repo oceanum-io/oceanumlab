@@ -1,4 +1,3 @@
-import schema from '../../schema/datamesh-connect.json';
 import { DATAMESH_UI_SERVICE } from '../constants';
 import {
   datameshUiSrc,
@@ -7,8 +6,10 @@ import {
 } from '../datameshUiUrl';
 
 describe('validDatameshUiUrl', () => {
-  it('is the default the settings schema offers', () => {
-    expect(schema.properties.datameshUiUrl.default).toBe(DATAMESH_UI_SERVICE);
+  it('is production when the deployment names no address', () => {
+    expect(validDatameshUiUrl(undefined).href).toBe(
+      new URL(DATAMESH_UI_SERVICE).href
+    );
   });
 
   it('takes an http(s) address as it is', () => {

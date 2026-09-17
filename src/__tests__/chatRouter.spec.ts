@@ -417,12 +417,10 @@ describe('ChatRouter: where a request goes, and what it is signed with', () => {
 
   it('sends to the configured address, without a double slash', async () => {
     const router = new ChatRouter(
-      settingsWith({
-        datameshToken: 'a-token',
-        aiBackendUrl: ' https://ai.oceanum.tech/ '
-      }),
+      settings,
       noSignIn,
-      noNotebook
+      noNotebook,
+      () => ' https://ai.oceanum.tech/ '
     );
 
     await router.route('hello');
@@ -434,12 +432,10 @@ describe('ChatRouter: where a request goes, and what it is signed with', () => {
 
   it('sends to the default for an invalid address', async () => {
     const router = new ChatRouter(
-      settingsWith({
-        datameshToken: 'a-token',
-        aiBackendUrl: 'javascript:alert(1)'
-      }),
+      settings,
       noSignIn,
-      noNotebook
+      noNotebook,
+      () => 'javascript:alert(1)'
     );
 
     await router.route('hello');
@@ -542,12 +538,10 @@ describe('ChatRouter: where a request goes, and what it is signed with', () => {
       throw new TypeError('Failed to fetch');
     });
     const router = new ChatRouter(
-      settingsWith({
-        datameshToken: 'a-token',
-        aiBackendUrl: 'http://localhost:8000/'
-      }),
+      settings,
       noSignIn,
-      noNotebook
+      noNotebook,
+      () => 'http://localhost:8000/'
     );
 
     await expect(router.route('hello')).rejects.toThrow(

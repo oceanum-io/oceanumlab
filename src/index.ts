@@ -70,11 +70,13 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
-    // The `datameshUiUrl` setting; the default until the settings load.
-    let datameshUiUrl = DATAMESH_UI_SERVICE;
-    // The `aiBackendUrl` and `datameshToken` settings for the AI chat; the
-    // defaults until the settings load.
-    let aiBackendUrl = OCEANUM_AI_BACKEND_URL;
+    // Where the Datamesh UI and Oceanum AI live is the deployment's business, so it comes
+    // from the sign-in environment (the Jupyter server's configuration, or the notebook
+    // site's) and falls back to production. These were user settings until 4.7.1; a
+    // user-editable service address is somewhere to send the user's credential.
+    const datameshUiUrl = auth?.urls?.datameshUi ?? DATAMESH_UI_SERVICE;
+    const aiBackendUrl = auth?.urls?.ai ?? OCEANUM_AI_BACKEND_URL;
+    // The `datameshToken` setting for the AI chat; empty until the settings load.
     let datameshTokenSetting = '';
     // Tells the sidebar the settings above have changed.
     const settingsChanged = new Signal<JupyterFrontEnd, void>(app);
@@ -96,14 +98,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         }).then(res => console.log(res));
       }
       window.injectToken = set.get('injectToken').user as boolean;
-      aiBackendUrl = set.get('aiBackendUrl').composite as string;
       datameshTokenSetting = set.get('datameshToken').composite as string;
-      // An open Datamesh UI panel follows a change of address.
-      datameshUiUrl = set.get('datameshUiUrl').composite as string;
-      const datameshUI = findDatameshUI();
-      if (datameshUI) {
-        datameshUI.url = datameshUiUrl;
-      }
       settingsChanged.emit();
     };
     //Try to get the datamesh token from the envars
@@ -210,10 +205,12 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
   id: '@oceanum/oceanumlab:ai-chat',
   autoStart: true,
   requires: [INotebookTracker, ISettingRegistry],
+  optional: [IOceanumAuth],
   activate: (
     app: JupyterFrontEnd,
     notebookTracker: INotebookTracker,
-    settingRegistry: ISettingRegistry
+    settingRegistry: ISettingRegistry,
+    auth: IOceanumAuth | null
   ) => {
     console.log('Oceanum AI chat extension is loaded');
 
@@ -233,26 +230,31 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         // The panel the current request read its selected cell from, if the
         // notebook was open: a code answer may replace that cell only there.
         let readFrom: NotebookPanel | null = null;
-        const router = new ChatRouter(settings, app.commands, async () => {
-          const open = await pin.current();
-          readFrom = open;
-          if (open) {
-            return snapshotOf(open.content);
-          }
-          const path = pin.path();
-          if (!path) {
-            return null;
-          }
-          try {
-            const file = await app.serviceManager.contents.get(path, {
-              content: true
-            });
-            return snapshotFromIpynb(file.content);
-          } catch {
-            // Gone: an answer's cells will go into a new notebook instead.
-            return null;
-          }
-        });
+        const router = new ChatRouter(
+          settings,
+          app.commands,
+          async () => {
+            const open = await pin.current();
+            readFrom = open;
+            if (open) {
+              return snapshotOf(open.content);
+            }
+            const path = pin.path();
+            if (!path) {
+              return null;
+            }
+            try {
+              const file = await app.serviceManager.contents.get(path, {
+                content: true
+              });
+              return snapshotFromIpynb(file.content);
+            } catch {
+              // Gone: an answer's cells will go into a new notebook instead.
+              return null;
+            }
+          },
+          () => auth?.urls?.ai ?? ''
+        );
         // Asked only when an answer has blocks to place: brings the
         // conversation's notebook to the front, opening it again if closed.
         const handoff = new KernelHandoff(

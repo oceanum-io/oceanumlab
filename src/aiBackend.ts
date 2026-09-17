@@ -47,7 +47,7 @@ export interface IAiCredential {
 }
 
 /**
- * The backend address for an `aiBackendUrl` setting value, without a trailing
+ * The backend address for a configured value, without a trailing
  * slash so a path can be appended. An invalid value falls back to the default.
  */
 export function aiBackendUrl(value: string | null | undefined): string {
