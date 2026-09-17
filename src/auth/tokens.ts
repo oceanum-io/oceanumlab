@@ -37,12 +37,12 @@ export interface IOceanumServiceUrls {
   readonly manage: string;
   /**
    * Datamesh UI, e.g. `https://ui.datamesh.oceanum.io`, shown by oceanumlab's Datamesh panel.
-   * Optional: without it, oceanumlab's own setting applies.
+   * Optional: without it, Oceanum production applies.
    */
   readonly datameshUi?: string;
   /**
    * Oceanum AI backend, e.g. `https://ai.oceanum.io`, called by oceanumlab's AI chat.
-   * Optional: without it, oceanumlab's own setting applies.
+   * Optional: without it, Oceanum production applies.
    */
   readonly ai?: string;
 }
