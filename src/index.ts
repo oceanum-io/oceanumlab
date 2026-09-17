@@ -67,6 +67,10 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     restorer: ILayoutRestorer,
     status: ILabStatus,
     settingRegistry: ISettingRegistry,
+    // Named only to keep the positions aligned with `requires`: this plugin takes
+    // IStateDB but does not use it, and leaving the parameter out silently shifted
+    // every later argument along by one.
+    _stateDB: IStateDB,
     auth: IOceanumAuth | null
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
