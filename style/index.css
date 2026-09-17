@@ -475,3 +475,31 @@
   border-top: 1px solid var(--jp-border-color2);
   margin: 0.5em 0;
 }
+
+/* Oceanum sign-in: the top-bar account control (src/auth/widget.ts). */
+.oc-Account {
+  align-self: center;
+  margin: 0 8px;
+  padding: 2px 10px;
+  border: var(--jp-border-width) solid var(--jp-border-color1);
+  border-radius: 12px;
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.oc-Account:hover:not([disabled]) {
+  background: var(--jp-layout-color2);
+}
+
+.oc-Account:not(.oc-mod-signedIn) {
+  border-color: var(--jp-brand-color1);
+  color: var(--jp-brand-color1);
+}
+
+.oc-Account[disabled] {
+  display: none;
+}
