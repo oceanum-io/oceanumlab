@@ -21,6 +21,9 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
+import { IOceanumAuth } from './auth/tokens';
+import { StoredNotebooks } from './StoredNotebooks';
+import { ITab, Tabs } from './Tabs';
 import {
   SIGN_IN_COMMAND,
   aiBackendUrl,
@@ -947,6 +950,10 @@ export interface IDatameshWidgetProps {
   settingsChanged: ISignal<unknown, void>;
   commands: CommandRegistry;
   getCurrentWidget: () => Widget;
+  /** Oceanum.io sign-in, or null on a host with no Oceanum environment. */
+  auth?: IOceanumAuth | null;
+  /** Open a stored notebook by spec store id. */
+  openStoredNotebook?: (id: string) => void;
 }
 
 /**
@@ -1014,18 +1021,10 @@ export class DatameshConnectWidget extends ReactWidget {
     );
   }
 
-  render(): React.ReactElement {
+  /** The Datamesh workspace tab: what this panel showed above the divider. */
+  renderDatamesh(): React.ReactElement {
     return (
-      <div className="datamesh-connect">
-        <header className="oceanum-sidebar-header">
-          <this.props.icon.react
-            tag="span"
-            width="auto"
-            height="20px"
-            verticalAlign="middle"
-          />
-          <span className="oceanum-sidebar-title">Oceanum.io</span>
-        </header>
+      <>
         <div className="datamesh-workspace-header">
           <span>Datamesh Workspace</span>
           <div
@@ -1047,9 +1046,78 @@ export class DatameshConnectWidget extends ReactWidget {
             settings={this.props}
           />
         </div>
-        <div className="datamesh-connect-divider" />
-        <AIChatPanel commands={this.props.commands} settings={this.props} />
+      </>
+    );
+  }
+
+  render(): React.ReactElement {
+    const tabs: ITab[] = [
+      {
+        id: 'notebooks',
+        label: 'Notebooks',
+        render: () =>
+          this.props.auth ? (
+            <StoredNotebooks
+              auth={this.props.auth}
+              onOpen={item => this.props.openStoredNotebook?.(item.id)}
+            />
+          ) : (
+            <div className="oceanum-text-empty">
+              Oceanum.io sign-in is not configured for this host.
+            </div>
+          )
+      },
+      {
+        id: 'datamesh',
+        label: 'Datamesh',
+        render: () => this.renderDatamesh()
+      },
+      {
+        id: 'ai',
+        label: 'Oceanum AI',
+        render: () => (
+          <AIChatPanel commands={this.props.commands} settings={this.props} />
+        )
+      }
+    ];
+    return (
+      <div className="datamesh-connect">
+        <header className="oceanum-sidebar-header">
+          <this.props.icon.react
+            tag="span"
+            width="auto"
+            height="20px"
+            verticalAlign="middle"
+          />
+          <span className="oceanum-sidebar-title">Oceanum.io</span>
+        </header>
+        <UseSignal signal={this.tabChanged} initialArgs={this.selectedTab}>
+          {(): React.ReactElement => (
+            <Tabs
+              tabs={tabs}
+              selected={this.selectedTab}
+              onSelect={id => this.selectTab(id)}
+            />
+          )}
+        </UseSignal>
       </div>
     );
   }
+
+  /** The visible tab. Restored with the widget, so a reload keeps the user's choice. */
+  get selectedTab(): string {
+    return this._selectedTab;
+  }
+
+  selectTab(id: string): void {
+    if (id !== this._selectedTab) {
+      this._selectedTab = id;
+      this.tabChanged.emit(id);
+    }
+  }
+
+  readonly tabChanged = new Signal<this, string>(this);
+  // Notebooks first: on notebook.oceanum.io this panel is how a user reaches their
+  // work, so it opens there rather than on Datamesh.
+  private _selectedTab = 'notebooks';
 }

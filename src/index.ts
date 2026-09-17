@@ -19,6 +19,10 @@ import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
 import { authPlugins } from './auth/plugin';
+import { IOceanumAuth } from './auth/tokens';
+
+/** share-oceanum's "open this spec store record" command, in the Notebook distribution. */
+const OPEN_STORED_NOTEBOOK = 'oceanum-share:open-id';
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
@@ -54,12 +58,16 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     ISettingRegistry,
     IStateDB
   ],
+  // Optional so the panel still loads on a host with no Oceanum environment; the
+  // Notebooks tab then explains why it is empty instead of the panel failing to start.
+  optional: [IOceanumAuth],
   activate: (
     app: JupyterFrontEnd,
     palette: ICommandPalette,
     restorer: ILayoutRestorer,
     status: ILabStatus,
-    settingRegistry: ISettingRegistry
+    settingRegistry: ISettingRegistry,
+    auth: IOceanumAuth | null
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
@@ -146,7 +154,16 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       aiBackendUrl: () => aiBackendUrl,
       settingsChanged,
       commands: app.commands,
-      getCurrentWidget
+      getCurrentWidget,
+      auth,
+      // share-oceanum registers this in the Oceanum Notebook distribution. Native
+      // JupyterLab has nothing that can open a spec store record until the drive in
+      // OCE-182, so the list stays read-only there rather than offering a dead click.
+      openStoredNotebook: app.commands.hasCommand(OPEN_STORED_NOTEBOOK)
+        ? (id: string): void => {
+            void app.commands.execute(OPEN_STORED_NOTEBOOK, { id });
+          }
+        : undefined
     });
     datameshConnectWidget.id = 'datamesh-connect';
     datameshConnectWidget.title.icon = oceanumIcon;
@@ -154,9 +171,9 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     restorer.add(datameshConnectWidget, 'datamesh-connect');
 
-    // Rank has been chosen somewhat arbitrarily to give priority to the running
-    // sessions widget in the sidebar.
-    app.shell.add(datameshConnectWidget, 'left', { rank: 900 });
+    // First in the sidebar: on notebook.oceanum.io this panel is how a user reaches
+    // their stored notebooks, so it should not sit below the running-sessions widget.
+    app.shell.add(datameshConnectWidget, 'left', { rank: 50 });
 
     app.commands.addCommand('datamesh-ui:open', {
       execute: (args: any) => {

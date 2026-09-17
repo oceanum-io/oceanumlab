@@ -503,3 +503,98 @@
 .oc-Account[disabled] {
   display: none;
 }
+
+/* The Oceanum side panel's tab strip (src/Tabs.tsx). */
+.oceanum-tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.oceanum-tabs-strip {
+  display: flex;
+  border-bottom: var(--jp-border-width) solid var(--jp-border-color2);
+}
+
+.oceanum-tab {
+  flex: 1 1 auto;
+  padding: 6px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--jp-ui-font-color2);
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  cursor: pointer;
+}
+
+.oceanum-tab:hover {
+  background: var(--jp-layout-color2);
+}
+
+.oceanum-tab-selected {
+  border-bottom-color: var(--jp-brand-color1);
+  color: var(--jp-ui-font-color1);
+}
+
+.oceanum-tabpanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+/* Stored notebooks (src/StoredNotebooks.tsx). */
+.oceanum-notebooks-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 8px 2px;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+  text-transform: uppercase;
+}
+
+.oceanum-notebooks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oceanum-notebooks-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--jp-ui-font-color1);
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.oceanum-notebooks-item:hover {
+  background: var(--jp-layout-color2);
+}
+
+.oceanum-notebooks-item-static {
+  cursor: default;
+}
+
+.oceanum-notebooks-item-static:hover {
+  background: transparent;
+}
+
+.oceanum-notebooks-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oceanum-text-error {
+  padding: 8px;
+  color: var(--jp-error-color1);
+  font-size: var(--jp-ui-font-size1);
+}
