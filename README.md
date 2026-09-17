@@ -31,7 +31,8 @@ ordinary JupyterLab, not a fault.
 Environments are **server configuration, not a frontend setting** — which Auth0 tenant this
 notebook signs in to, and which Datamesh its kernels are handed credentials for, is the
 deployment's decision, and a user-editable setting could be pointed at someone else's. Put
-them in `jupyter_server_config.py`:
+them in `jupyter_server_config.py` — `~/.jupyter/` for one user, or `etc/jupyter/` under the
+environment prefix for everyone using it; `jupyter --paths` lists both:
 
 ```python
 c.OceanumLab.environments = [
@@ -56,8 +57,10 @@ Two things that cost time if you get them wrong:
 
 - **`hosts` is matched against `window.location.hostname` exactly.** A page served from
   `http://127.0.0.1:8888` does not match `localhost`, and vice versa.
-- The nav shows a spinner for a few seconds on first load while Auth0 is asked, silently,
-  whether there is an existing session. A "Sign in" button after that means there was none.
+- The nav shows a spinner on first load while Auth0 is asked, silently, whether there is an
+  existing session. This took around half a minute in testing, so give it longer than feels
+  reasonable before concluding it is broken. A "Sign in" button after that means there was
+  no session, which is the normal signed-out result.
 
 JupyterLite deployments have no server, and are configured instead through
 `litePluginSettings` in `jupyter-lite.json`, keyed on `@oceanum/auth-oceanum:plugin`. Both
