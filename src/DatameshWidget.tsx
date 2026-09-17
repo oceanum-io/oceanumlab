@@ -583,8 +583,15 @@ function TokenConfigMessage({
 
   return (
     <div className="oceanum-token-config">
-      Set your <a onClick={openSettings}>Datamesh token</a> to enable Oceanum.io
-      services{' '}
+      Set your{' '}
+      <a
+        onClick={() =>
+          commands.execute('settingeditor:open', { query: 'Oceanum' })
+        }
+      >
+        Datamesh token
+      </a>{' '}
+      to enable Oceanum.io services{' '}
       <a
         href="https://home.oceanum.io/account"
         target="_blank"
