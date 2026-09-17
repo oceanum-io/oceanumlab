@@ -21,6 +21,9 @@ import React from 'react';
 import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
+import { IOceanumAuth } from './auth/tokens';
+import { StoredNotebooks } from './StoredNotebooks';
+import { ITab, Tabs } from './Tabs';
 import {
   SIGN_IN_COMMAND,
   aiBackendUrl,
@@ -954,6 +957,60 @@ export interface IDatameshWidgetProps {
   settingsChanged: ISignal<unknown, void>;
   commands: CommandRegistry;
   getCurrentWidget: () => Widget;
+  /** Oceanum.io sign-in, or null on a host with no Oceanum environment. */
+  auth?: IOceanumAuth | null;
+  /** Open a stored notebook by spec store id. */
+  openStoredNotebook?: (id: string) => void;
+}
+
+/**
+ * The panel's tabs.
+ *
+ * A component rather than a list built in `render`, because whether Oceanum AI is
+ * reachable is not static: `useAiAccess` re-reads it when the settings change and when
+ * the host signals a sign-in or sign-out. An AI tab is only offered when the chat has a
+ * credential to work with — otherwise it would open on the same nothing the panel
+ * rendered before there were tabs, except now with a label promising otherwise.
+ */
+function PanelTabs({
+  auth,
+  commands,
+  settings,
+  renderDatamesh,
+  selected,
+  onSelect
+}: {
+  auth: IOceanumAuth | null;
+  commands: CommandRegistry;
+  settings: IAiSettings;
+  renderDatamesh: () => React.ReactElement;
+  selected: string;
+  onSelect: (id: string) => void;
+}): React.ReactElement {
+  const access = useAiAccess(commands, settings);
+  const tabs: ITab[] = [
+    {
+      id: 'notebooks',
+      label: 'Notebooks',
+      render: () =>
+        auth ? (
+          <StoredNotebooks auth={auth} />
+        ) : (
+          <div className="oceanum-text-empty">
+            Oceanum.io sign-in is not configured for this host.
+          </div>
+        )
+    },
+    { id: 'datamesh', label: 'Datamesh', render: renderDatamesh }
+  ];
+  if (access.source) {
+    tabs.push({
+      id: 'ai',
+      label: 'Oceanum AI',
+      render: () => <AIChatPanel commands={commands} settings={settings} />
+    });
+  }
+  return <Tabs tabs={tabs} selected={selected} onSelect={onSelect} />;
 }
 
 /**
@@ -1021,18 +1078,10 @@ export class DatameshConnectWidget extends ReactWidget {
     );
   }
 
-  render(): React.ReactElement {
+  /** The Datamesh workspace tab: what this panel showed above the divider. */
+  renderDatamesh(): React.ReactElement {
     return (
-      <div className="datamesh-connect">
-        <header className="oceanum-sidebar-header">
-          <this.props.icon.react
-            tag="span"
-            width="auto"
-            height="20px"
-            verticalAlign="middle"
-          />
-          <span className="oceanum-sidebar-title">Oceanum.io</span>
-        </header>
+      <>
         <div className="datamesh-workspace-header">
           <span>Datamesh Workspace</span>
           <div
@@ -1054,9 +1103,56 @@ export class DatameshConnectWidget extends ReactWidget {
             settings={this.props}
           />
         </div>
-        <div className="datamesh-connect-divider" />
-        <AIChatPanel commands={this.props.commands} settings={this.props} />
+      </>
+    );
+  }
+
+  render(): React.ReactElement {
+    return (
+      <div className="datamesh-connect">
+        <header className="oceanum-sidebar-header">
+          <this.props.icon.react
+            tag="span"
+            width="auto"
+            height="20px"
+            verticalAlign="middle"
+          />
+          <span className="oceanum-sidebar-title">Oceanum.io</span>
+        </header>
+        <UseSignal signal={this.tabChanged} initialArgs={this.selectedTab}>
+          {(): React.ReactElement => (
+            <PanelTabs
+              auth={this.props.auth ?? null}
+              commands={this.props.commands}
+              settings={this.props}
+              renderDatamesh={() => this.renderDatamesh()}
+              selected={this.selectedTab}
+              onSelect={id => this.selectTab(id)}
+            />
+          )}
+        </UseSignal>
       </div>
     );
   }
+
+  /**
+   * The visible tab. The widget only holds it and announces changes through
+   * `tabChanged`; the plugin persists it in IStateDB, because the layout restorer
+   * restores a widget's place in the shell rather than fields on it.
+   */
+  get selectedTab(): string {
+    return this._selectedTab;
+  }
+
+  selectTab(id: string): void {
+    if (id !== this._selectedTab) {
+      this._selectedTab = id;
+      this.tabChanged.emit(id);
+    }
+  }
+
+  readonly tabChanged = new Signal<this, string>(this);
+  // Notebooks first: on notebook.oceanum.io this panel is how a user reaches their
+  // work, so it opens there rather than on Datamesh.
+  private _selectedTab = 'notebooks';
 }

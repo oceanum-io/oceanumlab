@@ -19,6 +19,8 @@ import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
 import { authPlugins } from './auth/plugin';
+import { IOceanumAuth } from './auth/tokens';
+
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
@@ -54,12 +56,17 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     ISettingRegistry,
     IStateDB
   ],
+  // Optional so the panel still loads on a host with no Oceanum environment; the
+  // Notebooks tab then explains why it is empty instead of the panel failing to start.
+  optional: [IOceanumAuth],
   activate: (
     app: JupyterFrontEnd,
     palette: ICommandPalette,
     restorer: ILayoutRestorer,
     status: ILabStatus,
-    settingRegistry: ISettingRegistry
+    settingRegistry: ISettingRegistry,
+    stateDB: IStateDB,
+    auth: IOceanumAuth | null
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
@@ -146,7 +153,13 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       aiBackendUrl: () => aiBackendUrl,
       settingsChanged,
       commands: app.commands,
-      getCurrentWidget
+      getCurrentWidget,
+      auth
+      // No `openStoredNotebook`: nothing can open a spec store record by id yet.
+      // share-oceanum has `oceanum-share:open`, but it takes no arguments — it opens
+      // its own picker — so there is nothing to hand an id to. Opening arrives with
+      // the drive in OCE-182, where the contents API makes it the ordinary path.
+      // Until then the list reads rather than offering a click that does nothing.
     });
     datameshConnectWidget.id = 'datamesh-connect';
     datameshConnectWidget.title.icon = oceanumIcon;
@@ -154,8 +167,30 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     restorer.add(datameshConnectWidget, 'datamesh-connect');
 
+    // The layout restorer restores the widget's place in the shell, not fields on it,
+    // so the chosen tab is kept here. Restoring is best effort: a missing or unreadable
+    // entry just leaves the default.
+    const TAB_STATE_KEY = `${PLUGIN_ID}:tab`;
+    void stateDB
+      .fetch(TAB_STATE_KEY)
+      .then(value => {
+        if (typeof value === 'string') {
+          datameshConnectWidget.selectTab(value);
+        }
+      })
+      .catch((): void => undefined);
+    datameshConnectWidget.tabChanged.connect((_, id) => {
+      void stateDB.save(TAB_STATE_KEY, id);
+    });
+
     // Rank has been chosen somewhat arbitrarily to give priority to the running
     // sessions widget in the sidebar.
+    //
+    // Oceanum Notebook wants this panel first instead, but that is a property of that
+    // distribution rather than of the extension: in a plain JupyterLab the file browser
+    // is the primary navigation surface and displacing it would be a regression. A
+    // distribution moves it with JupyterLab's own shell user-layout settings, keyed on
+    // this widget's id, rather than this extension hard-coding one host's preference.
     app.shell.add(datameshConnectWidget, 'left', { rank: 900 });
 
     app.commands.addCommand('datamesh-ui:open', {
