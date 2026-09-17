@@ -39,9 +39,21 @@ const TABS: ITab[] = [
 async function mount(): Promise<Harness> {
   const widget = new Harness(TABS);
   Widget.attach(widget, document.body);
-  // ReactWidget renders on an animation frame.
-  await new Promise(resolve => setTimeout(resolve, 50));
-  return widget;
+  // ReactWidget renders on an animation frame, so wait for the first pane rather than
+  // sleeping a fixed 50ms and hoping. That wait was enough on a warm run and not on a cold
+  // one: the first run after a fresh install, with an empty ts-jest cache, rendered nothing
+  // in time and every test here failed at once with zero panes -- which reads like a broken
+  // component rather than a slow one.
+  const deadline = Date.now() + 4000;
+  for (;;) {
+    if (widget.node.querySelector('[role="tabpanel"]')) {
+      return widget;
+    }
+    if (Date.now() > deadline) {
+      throw new Error('Tabs rendered no panes within 4s');
+    }
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
 }
 
 function strip(widget: Harness): HTMLElement[] {

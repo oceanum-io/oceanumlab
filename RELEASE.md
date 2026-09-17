@@ -56,6 +56,29 @@ npm login
 npm publish --access public
 ```
 
+### `@oceanum/auth-oceanum` — one-off bootstrap
+
+The repository publishes a second npm package, `@oceanum/auth-oceanum` (the Oceanum.io
+sign-in extension). oceanum-notebook's `share-oceanum` imports `IOceanumAuth` from it at
+build time, which is the only reason it needs to be on npm — the labextension itself
+travels inside the `oceanumlab` wheel.
+
+`publish-release.yml` publishes it automatically, but **only once it exists on the
+registry**. npm's OIDC trusted publishing cannot perform a package's first publish: npm
+requires the package to exist before a trusted publisher can be configured for it, and the
+settings page that configures one is unreachable until then. So the first publish is a
+one-off manual step:
+
+```bash
+jlpm && jlpm build:prod          # lib/ is gitignored, and `files` ships it
+npm login
+npm publish -w @oceanum/auth-oceanum
+```
+
+Then on npmjs.com, under the package's **Settings → Trusted publisher**, add repository
+`oceanum-io/oceanumlab` with workflow `publish-release.yml` and no environment. Every
+release after that publishes it without a token, like the root package.
+
 ## Automated releases with the Jupyter Releaser
 
 The extension repository should already be compatible with the Jupyter Releaser.

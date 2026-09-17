@@ -47,6 +47,26 @@ jobs:
       - name: Publish to npm
         run: npm publish
 
+      # The sign-in extension is published separately: it is its own npm package, which
+      # oceanum-notebook's share-oceanum imports for IOceanumAuth at build time.
+      #
+      # Guarded rather than unconditional, for two reasons. npm's OIDC trusted publishing
+      # cannot perform a package's FIRST publish -- npm requires the package to exist
+      # before a trusted publisher can be configured -- so until it is bootstrapped once
+      # by hand this step would fail every release. And its version is independent of the
+      # root's, so most releases have nothing new to publish. See RELEASE.md.
+      - name: Publish @oceanum/auth-oceanum to npm
+        run: |
+          set -eu
+          version="$(node -p "require('./packages/auth-oceanum/package.json').version")"
+          if ! npm view "@oceanum/auth-oceanum" version >/dev/null 2>&1; then
+            echo "::warning::@oceanum/auth-oceanum is not on npm yet; OIDC cannot do a first publish. Bootstrap it once by hand, then configure trusted publishing (RELEASE.md)."
+          elif npm view "@oceanum/auth-oceanum@$version" version >/dev/null 2>&1; then
+            echo "@oceanum/auth-oceanum@$version is already published; nothing to do."
+          else
+            npm publish -w @oceanum/auth-oceanum
+          fi
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 

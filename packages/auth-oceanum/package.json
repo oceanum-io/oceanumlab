@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Oceanum.io sign-in for oceanumlab: the Oceanum nav in the top bar, and Datamesh credentials in every kernel",
   "license": "BSD-3-Clause",
-  "private": true,
   "keywords": [
     "jupyterlab-extension"
   ],
@@ -20,6 +19,9 @@
     "style/index.js"
   ],
   "styleModule": "style/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b && jupyter-builder build --development True .",
     "build:prod": "tsc -b && jupyter-builder build .",
