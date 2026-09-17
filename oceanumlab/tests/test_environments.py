@@ -35,6 +35,14 @@ ENVIRONMENT = {
 }
 
 
+def test_page_option_name_matches_the_frontend():
+    # The frontend reads this literal (ENVIRONMENTS_OPTION in
+    # packages/auth-oceanum/src/config.ts, pinned by its own test). Renaming either side
+    # alone would silently stop every deployment's environments reaching the page, so both
+    # sides pin the string and a rename fails here.
+    assert ENVIRONMENTS_OPTION == "oceanumEnvironments"
+
+
 def test_publishes_configured_environments_to_the_page():
     # The frontend reads this page option; it is deployment configuration rather than a
     # frontend setting, so that a user cannot point sign-in at another Auth0 tenant.

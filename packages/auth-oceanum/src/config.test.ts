@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  ENVIRONMENTS_OPTION,
   offersSignIn,
   parseEnvironments,
   PLUGIN_ID,
@@ -154,6 +155,13 @@ describe('parseEnvironments', () => {
 });
 
 describe('readEnvironmentsOption', () => {
+  it('reads the page option name the server publishes under', () => {
+    // oceanumlab's server extension writes this literal (ENVIRONMENTS_OPTION in
+    // oceanumlab/__init__.py, pinned by its own test). Renaming either side alone would
+    // silently stop every deployment's environments reaching the page.
+    expect(ENVIRONMENTS_OPTION).toBe('oceanumEnvironments');
+  });
+
   // What a native JupyterLab uses: the server extension publishes this page option from
   // jupyter_server_config, so the environments are never a user-editable setting. It must
   // validate identically to the JupyterLite source, or a deployment could be accepted on one
