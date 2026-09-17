@@ -2,9 +2,17 @@ const jestJupyterLab = require('@jupyterlab/testutils/lib/jest-config');
 
 const esModules = [
   '@codemirror',
+  // ESM-only dependencies of @jupyterlab/ui-components, which the sidebar
+  // widget's tests import.
+  '@jupyter/react-components',
+  '@jupyter/web-components',
+  '@microsoft',
   '@jupyter/ydoc',
   '@jupyterlab/',
+  'color',
+  'exenv-es6',
   'lib0',
+  'marked',
   'nanoid',
   'vscode-ws-jsonrpc',
   'y-protocols',

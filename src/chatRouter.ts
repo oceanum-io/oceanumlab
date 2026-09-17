@@ -1,5 +1,11 @@
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { OCEANUM_AI_BACKEND_URL } from './constants';
+import {
+  aiBackendUrl,
+  canSignIn,
+  resolveAiCredential,
+  signInToken,
+  type AuthCommands
+} from './aiBackend';
 import type { Progress } from './progress';
 import { readSse } from './sse';
 import type { ObservedRun } from './notebookRun';
@@ -76,6 +82,8 @@ function asOceanumResponse(data: unknown): OceanumResponse {
 
 export class ChatRouter {
   /**
+   * @param _commands Where the host's Oceanum.io sign-in is asked for, when
+   *   there is no pasted Datamesh token.
    * @param _notebook What the conversation's notebook holds -- the one its
    *   answers are placed in -- or null if there is nothing to send. Asked on
    *   every request, so it follows the conversation rather than whichever tab
@@ -83,6 +91,7 @@ export class ChatRouter {
    */
   constructor(
     private _settings: ISettingRegistry.ISettings,
+    private _commands: AuthCommands,
     private _notebook: () => Promise<INotebookSnapshot | null>
   ) {}
 
@@ -178,20 +187,30 @@ export class ChatRouter {
     signal?: AbortSignal,
     onProgress?: (progress: Progress) => void
   ): Promise<unknown> {
-    const token = this._settings.get('datameshToken').composite as string;
-    if (!token) {
+    // Resolved per request, not once: the sign-in token refreshes, and the
+    // user can sign in, sign out or paste a token between two requests.
+    const credential = await resolveAiCredential(
+      this._settings.get('datameshToken').composite,
+      signInToken(this._commands)
+    );
+    if (!credential) {
       throw new ChatRouterError(
-        'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
+        canSignIn(this._commands)
+          ? 'Not signed in. Sign in to Oceanum.io to use Oceanum AI, or set a Datamesh token in Settings → Oceanum.io.'
+          : 'Datamesh token not configured. Set your token in Settings → Oceanum.io.'
       );
     }
+    const backend = aiBackendUrl(
+      this._settings.get('aiBackendUrl').composite as string
+    );
 
     let response: Response;
     try {
-      response = await fetch(`${OCEANUM_AI_BACKEND_URL}${path}`, {
+      response = await fetch(`${backend}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Datamesh-Token': token,
+          ...credential.headers,
           // Ask for the streamed form only when someone is listening. The
           // server requires the media type to be NAMED -- a wildcard never
           // selects it -- so omitting this is what keeps the plain JSON path
@@ -208,12 +227,21 @@ export class ChatRouter {
         throw err;
       }
       throw new ChatRouterError(
-        `Could not reach Oceanum AI backend at ${OCEANUM_AI_BACKEND_URL}. Is it running?`
+        `Could not reach Oceanum AI backend at ${backend}. Is it running?`
       );
     }
 
     if (response.status === 401) {
-      throw new ChatRouterError('Invalid or expired Datamesh token.', 401);
+      let message = 'Invalid or expired Datamesh token.';
+      if (credential.source === 'sign-in') {
+        message =
+          'Your Oceanum.io sign-in was not accepted. Sign in to Oceanum.io again.';
+      } else if (canSignIn(this._commands)) {
+        // A pasted token wins over the sign-in, so say how to fall back to it.
+        message +=
+          ' Update it, or clear it to use your Oceanum.io sign-in, in Settings → Oceanum.io.';
+      }
+      throw new ChatRouterError(message, 401);
     }
 
     if (!response.ok) {

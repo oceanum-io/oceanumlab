@@ -32,6 +32,28 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@auth0/auth0-auth-js@npm:^1.15.0":
+  version: 1.15.0
+  resolution: "@auth0/auth0-auth-js@npm:1.15.0"
+  dependencies:
+    jose: ^6.0.8
+    openid-client: ^6.8.0
+  checksum: 8eeb7c7c0ab9872ad20f90e87c435467ed0f22283ee7516dd94bfbcd5dbd523460684ecde308f08c8f7312e890a3b66dbf421c8c3ac18f446e09dd4c424df8fe
+  languageName: node
+  linkType: hard
+
+"@auth0/auth0-spa-js@npm:^2.25.0":
+  version: 2.26.0
+  resolution: "@auth0/auth0-spa-js@npm:2.26.0"
+  dependencies:
+    "@auth0/auth0-auth-js": ^1.15.0
+    browser-tabs-lock: ^1.3.0
+    dpop: ^2.1.1
+    es-cookie: ~1.3.2
+  checksum: 9c762ddc1200404c6d4c1e53b7d54601b91dbd9f03bc8708145c2f28ce0275aaea70c41bf15b11f7d329f876ded6d871651e40851e5ad3d8bb83292671a1cb1c
+  languageName: node
+  linkType: hard
+
 "@babel/code-frame@npm:^7.0.0, @babel/code-frame@npm:^7.12.13, @babel/code-frame@npm:^7.23.5, @babel/code-frame@npm:^7.24.1, @babel/code-frame@npm:^7.24.2":
   version: 7.24.2
   resolution: "@babel/code-frame@npm:7.24.2"
@@ -2468,6 +2490,32 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/console@npm:^4.6.3":
+  version: 4.6.3
+  resolution: "@jupyterlab/console@npm:4.6.3"
+  dependencies:
+    "@jupyter/ydoc": ^4.0.0
+    "@jupyterlab/apputils": ^4.7.3
+    "@jupyterlab/cells": ^4.6.3
+    "@jupyterlab/codeeditor": ^4.6.3
+    "@jupyterlab/codemirror": ^4.6.3
+    "@jupyterlab/coreutils": ^6.6.3
+    "@jupyterlab/nbformat": ^4.6.3
+    "@jupyterlab/observables": ^5.6.3
+    "@jupyterlab/rendermime": ^4.6.3
+    "@jupyterlab/services": ^7.6.3
+    "@jupyterlab/translation": ^4.6.3
+    "@jupyterlab/ui-components": ^4.6.3
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/disposable": ^2.1.5
+    "@lumino/dragdrop": ^2.1.8
+    "@lumino/messaging": ^2.0.4
+    "@lumino/signaling": ^2.1.5
+    "@lumino/widgets": ^2.8.0
+  checksum: 976bc0085b9a00cfc818cfc51080963a5140c3936bc8f0aa8bc376abe2eb6ca3be43fd4a8ace7312d6c83120ddce5dacac368e1b028d8b2cf2340dfb4fad5a12
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/core-meta@npm:^4.6.1":
   version: 4.6.3
   resolution: "@jupyterlab/core-meta@npm:4.6.3"
@@ -3437,13 +3485,22 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@oceanum/oceanumlab@workspace:."
   dependencies:
+    "@auth0/auth0-spa-js": ^2.25.0
     "@jupyter/builder": ^1.2.3
     "@jupyterlab/application": ^4.6.3
     "@jupyterlab/apputils": ^4.7.3
     "@jupyterlab/cells": ^4.6.3
+    "@jupyterlab/console": ^4.6.3
+    "@jupyterlab/coreutils": ^6.6.3
     "@jupyterlab/notebook": ^4.6.3
+    "@jupyterlab/services": ^7.6.3
     "@jupyterlab/settingregistry": ^4.6.3
     "@jupyterlab/testutils": ^4.6.3
+    "@lumino/commands": ^2.3.3
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/disposable": ^2.1.5
+    "@lumino/signaling": ^2.1.5
+    "@lumino/widgets": ^2.8.0
     "@phosphor-icons/react": ^2.1.10
     "@types/jest": ^29.5.12
     "@types/json-schema": ^7.0.15
@@ -4748,6 +4805,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"browser-tabs-lock@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "browser-tabs-lock@npm:1.3.0"
+  dependencies:
+    lodash: ">=4.17.21"
+  checksum: 4fcfb6d5fc4bc5e4f53c298d555d8421ca4f815e32c2650b73008868eb70d7ee41aca8f92ad84d9beb77a8ffe0cb99f1efc8d9b3135cc434d48f7bd569f2bb72
+  languageName: node
+  linkType: hard
+
 "browserslist@npm:^4.22.2, browserslist@npm:^4.23.0":
   version: 4.23.0
   resolution: "browserslist@npm:4.23.0"
@@ -5853,6 +5919,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dpop@npm:^2.1.1":
+  version: 2.1.2
+  resolution: "dpop@npm:2.1.2"
+  checksum: acc9935717cb271c87398c3a05ea2a5d82d2cfb570139fdfbfad0ef83889822fb47707efb4047c2f7b04f241c4db38f6e531298b67f4a8d370cf3369f96d5470
+  languageName: node
+  linkType: hard
+
 "duplicate-package-checker-webpack-plugin@npm:^3.0.0":
   version: 3.0.0
   resolution: "duplicate-package-checker-webpack-plugin@npm:3.0.0"
@@ -5997,6 +6070,13 @@ __metadata:
     unbox-primitive: ^1.0.2
     which-typed-array: ^1.1.15
   checksum: f840cf161224252512f9527306b57117192696571e07920f777cb893454e32999206198b4f075516112af6459daca282826d1735c450528470356d09eff3a9ae
+  languageName: node
+  linkType: hard
+
+"es-cookie@npm:~1.3.2":
+  version: 1.3.2
+  resolution: "es-cookie@npm:1.3.2"
+  checksum: 8509355a7d00bd2e3fcab4a76a90e0da35b40c1e76f114f8ffe805ab3fdfff51e8fc0e7cdccd9bf1536066150b6b9861e37d78ae14f80680513901902ac4f0df
   languageName: node
   linkType: hard
 
@@ -7978,6 +8058,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jose@npm:^6.0.8, jose@npm:^6.2.12":
+  version: 6.2.12
+  resolution: "jose@npm:6.2.12"
+  checksum: 5b33046c4ba5a1a5a64219ba8e60fafeeafdb48bb765b09127b6ab1c0fa01418be8df841e1463cf04274f2ae21195626844cf7381ccd9eebfe7560ff87da368e
+  languageName: node
+  linkType: hard
+
 "js-tokens@npm:^3.0.0 || ^4.0.0, js-tokens@npm:^4.0.0":
   version: 4.0.0
   resolution: "js-tokens@npm:4.0.0"
@@ -8354,6 +8441,13 @@ __metadata:
   version: 4.4.2
   resolution: "lodash.truncate@npm:4.4.2"
   checksum: b463d8a382cfb5f0e71c504dcb6f807a7bd379ff1ea216669aa42c52fc28c54e404bfbd96791aa09e6df0de2c1d7b8f1b7f4b1a61f324d38fe98bc535aeee4f5
+  languageName: node
+  linkType: hard
+
+"lodash@npm:>=4.17.21":
+  version: 4.18.1
+  resolution: "lodash@npm:4.18.1"
+  checksum: bb5f5b49aad29614e709af02b64c56b0f8b78c6a81434a3c1ae527d2f0f78ca08f9d9fb22aa825a053876c9d2166e9c01f31c356014b5e2bdc0556c057433102
   languageName: node
   linkType: hard
 
@@ -8889,6 +8983,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"oauth4webapi@npm:^3.8.8":
+  version: 3.8.8
+  resolution: "oauth4webapi@npm:3.8.8"
+  checksum: 599a51f8588cfcc29a52065ceb7b539e8021f2725620280d1f16aa5d237904cf36bfa9bb9e7642b522e7cd75233429bbd3dc7f7d2acea8a59657dd3a296c8d15
+  languageName: node
+  linkType: hard
+
 "object-assign@npm:^4.1.1":
   version: 4.1.1
   resolution: "object-assign@npm:4.1.1"
@@ -8937,6 +9038,16 @@ __metadata:
   dependencies:
     mimic-fn: ^2.1.0
   checksum: 2478859ef817fc5d4e9c2f9e5728512ddd1dbc9fb7829ad263765bb6d3b91ce699d6e2332eef6b7dff183c2f490bd3349f1666427eaba4469fba0ac38dfd0d34
+  languageName: node
+  linkType: hard
+
+"openid-client@npm:^6.8.0":
+  version: 6.8.8
+  resolution: "openid-client@npm:6.8.8"
+  dependencies:
+    jose: ^6.2.12
+    oauth4webapi: ^3.8.8
+  checksum: 38bfb838edec7be551cbe65d9634f5272757708e96eb8299ec462b89227a923de2ad4446c9a545673d609495141db79d319b60a18349e7761f85b607cc05b7c2
   languageName: node
   linkType: hard
 

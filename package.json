@@ -1,6 +1,6 @@
 {
     "name": "@oceanum/oceanumlab",
-    "version": "4.6.1",
+    "version": "4.7.0",
     "description": "A Jupyterlab extension to interact with the Oceanum.io platform",
     "keywords": [
         "jupyter",
@@ -20,6 +20,7 @@
         "lib/**/*.{d.ts,eot,gif,html,jpg,js,js.map,json,png,svg,woff2,ttf}",
         "style/**/*.{css,js,eot,gif,html,jpg,json,png,svg,woff2,ttf}",
         "src/**/*.{ts,tsx}",
+        "kernel/*.py",
         "schema/*.json"
     ],
     "main": "lib/index.js",
@@ -57,11 +58,20 @@
         "watch:labextension": "jupyter-builder watch ."
     },
     "dependencies": {
+        "@auth0/auth0-spa-js": "^2.25.0",
         "@jupyterlab/application": "^4.6.3",
         "@jupyterlab/apputils": "^4.7.3",
         "@jupyterlab/cells": "^4.6.3",
+        "@jupyterlab/console": "^4.6.3",
+        "@jupyterlab/coreutils": "^6.6.3",
         "@jupyterlab/notebook": "^4.6.3",
+        "@jupyterlab/services": "^7.6.3",
         "@jupyterlab/settingregistry": "^4.6.3",
+        "@lumino/commands": "^2.3.3",
+        "@lumino/coreutils": "^2.2.2",
+        "@lumino/disposable": "^2.1.5",
+        "@lumino/signaling": "^2.1.5",
+        "@lumino/widgets": "^2.8.0",
         "@phosphor-icons/react": "^2.1.10",
         "marked": "^18.0.13"
     },
@@ -100,7 +110,8 @@
     "jupyterlab": {
         "extension": true,
         "outputDir": "oceanumlab/labextension",
-        "schemaDir": "schema"
+        "schemaDir": "schema",
+        "webpackConfig": "./webpack.config.js"
     },
     "eslintIgnore": [
         "node_modules",

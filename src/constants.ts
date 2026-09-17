@@ -3,7 +3,7 @@
  * These values are compiled into the extension.
  */
 
-/** URL of the Oceanum AI backend service */
+/** Default URL of the Oceanum AI backend service (the `aiBackendUrl` setting) */
 export const OCEANUM_AI_BACKEND_URL = 'https://ai.oceanum.io';
 
 /** URL of the Datamesh UI embedded in the Datamesh panel */

@@ -7,6 +7,7 @@ import {
 import { ICommandPalette, Notification } from '@jupyterlab/apputils';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { find } from '@lumino/algorithm';
+import { Signal } from '@lumino/signaling';
 import { Widget } from '@lumino/widgets';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
@@ -17,11 +18,16 @@ import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
+import { authPlugins } from './auth/plugin';
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
 import { KernelHandoff } from './kernelHandoff';
 import { runChatLoop, STOPPED } from './aiLoop';
-import { MAX_OBSERVE_ROUNDS } from './constants';
+import {
+  DATAMESH_UI_SERVICE,
+  MAX_OBSERVE_ROUNDS,
+  OCEANUM_AI_BACKEND_URL
+} from './constants';
 
 import '../style/index.css';
 
@@ -57,6 +63,21 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
   ) => {
     console.log('Oceanum datamesh connect extension is loaded');
 
+    // The `datameshUiUrl` setting; the default until the settings load.
+    let datameshUiUrl = DATAMESH_UI_SERVICE;
+    // The `aiBackendUrl` and `datameshToken` settings for the AI chat; the
+    // defaults until the settings load.
+    let aiBackendUrl = OCEANUM_AI_BACKEND_URL;
+    let datameshTokenSetting = '';
+    // Tells the sidebar the settings above have changed.
+    const settingsChanged = new Signal<JupyterFrontEnd, void>(app);
+
+    const findDatameshUI = (): DatameshUI | undefined =>
+      find(
+        app.shell.widgets('main'),
+        (widget: Widget) => widget.id === 'datamesh-ui'
+      ) as DatameshUI | undefined;
+
     //Try to get the datamesh token from the settings
     const updateSettings = (set: ISettingRegistry.ISettings) => {
       const token = set.get('datameshToken');
@@ -68,6 +89,15 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         }).then(res => console.log(res));
       }
       window.injectToken = set.get('injectToken').user as boolean;
+      aiBackendUrl = set.get('aiBackendUrl').composite as string;
+      datameshTokenSetting = set.get('datameshToken').composite as string;
+      // An open Datamesh UI panel follows a change of address.
+      datameshUiUrl = set.get('datameshUiUrl').composite as string;
+      const datameshUI = findDatameshUI();
+      if (datameshUI) {
+        datameshUI.url = datameshUiUrl;
+      }
+      settingsChanged.emit();
     };
     //Try to get the datamesh token from the envars
 
@@ -91,18 +121,12 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     const openDatameshUI = (event: any): void => {
       const widgetId = 'datamesh-ui';
-      const openWidget = find(
-        app.shell.widgets('main'),
-        (widget: Widget, index: number) => {
-          return widget.id === widgetId;
-        }
-      );
-      if (openWidget) {
+      if (findDatameshUI()) {
         app.shell.activateById(widgetId);
         return;
       }
 
-      const datameshUIWidget = new DatameshUI();
+      const datameshUIWidget = new DatameshUI(datameshUiUrl);
       datameshUIWidget.title.label = 'Oceanum Datamesh';
       datameshUIWidget.id = widgetId;
       datameshUIWidget.title.closable = true;
@@ -116,6 +140,11 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       name: 'Datamesh Connect',
       icon: oceanumIcon,
       openDatameshUI: openDatameshUI,
+      datameshUiUrl: () => datameshUiUrl,
+      datameshUiFrame: () => findDatameshUI()?.frame ?? null,
+      datameshToken: () => datameshTokenSetting,
+      aiBackendUrl: () => aiBackendUrl,
+      settingsChanged,
       commands: app.commands,
       getCurrentWidget
     });
@@ -169,7 +198,7 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
         // The panel the current request read its selected cell from, if the
         // notebook was open: a code answer may replace that cell only there.
         let readFrom: NotebookPanel | null = null;
-        const router = new ChatRouter(settings, async () => {
+        const router = new ChatRouter(settings, app.commands, async () => {
           const open = await pin.current();
           readFrom = open;
           if (open) {
@@ -324,4 +353,8 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default [datamesh_connect_extension, oceanum_ai_extension];
+export default [
+  ...authPlugins,
+  datamesh_connect_extension,
+  oceanum_ai_extension
+];
