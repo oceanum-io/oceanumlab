@@ -4,6 +4,10 @@
     // `node` so a spec can read a real asset off disk — Tabs.spec.tsx loads
     // style/index.css to assert the stylesheet hides inactive panes, which asserting
     // the `hidden` IDL property cannot.
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    // Wider than the build's `src`, so ts-jest can also compile the sign-in contract
+    // that jest.config.js maps @oceanum/auth-oceanum to. Test-only: the build still
+    // uses tsconfig.json.
+    "rootDir": "."
   }
 }

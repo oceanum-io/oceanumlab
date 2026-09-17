@@ -1,9 +1,12 @@
+import { describe, expect, it } from 'vitest';
+
 import {
   isValidAccessToken,
   kernelSetupCode,
   pythonString,
+  settingToken,
   SNIPPET_MARKER
-} from '../auth/kernelCode';
+} from './kernelCode';
 
 const JWT = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl-_';
 
@@ -28,6 +31,23 @@ describe('isValidAccessToken', () => {
 describe('pythonString', () => {
   it('escapes quotes, backslashes and newlines', () => {
     expect(pythonString('a"b\\c\nd')).toBe('"a\\"b\\\\c\\nd"');
+  });
+});
+
+describe('settingToken', () => {
+  it('passes a Datamesh token as it is, for oceanum to send as a Datamesh token', () => {
+    expect(settingToken('  a1b2c3d4e5  ')).toBe('a1b2c3d4e5');
+  });
+
+  it('sends a JWT, with or without the Bearer prefix, as a bearer token', () => {
+    expect(settingToken(JWT)).toBe(`Bearer ${JWT}`);
+    expect(settingToken(`Bearer ${JWT}`)).toBe(`Bearer ${JWT}`);
+  });
+
+  it('ignores an empty, missing or malformed setting', () => {
+    expect(settingToken('')).toBeNull();
+    expect(settingToken(undefined)).toBeNull();
+    expect(settingToken('x")\nimport os')).toBeNull();
   });
 });
 
@@ -63,9 +83,18 @@ describe('kernelSetupCode', () => {
     });
 
     expect(code.startsWith(`def ${SNIPPET_MARKER}():`)).toBe(true);
-    expect(code.replace(/\s+$/, '').endsWith(`del ${SNIPPET_MARKER}`)).toBe(
-      true
-    );
+    expect(code.trimEnd().endsWith(`del ${SNIPPET_MARKER}`)).toBe(true);
+  });
+
+  it("prefers the token from oceanumlab's setting to the sign-in token", () => {
+    const code = kernelSetupCode({
+      bootstrapSource: '',
+      datameshUrl: null,
+      accessToken: JWT,
+      settingToken: 'datamesh-token-123'
+    });
+
+    expect(code).toContain('module.set_token("datamesh-token-123")');
   });
 
   it('refuses a malformed token instead of embedding it', () => {

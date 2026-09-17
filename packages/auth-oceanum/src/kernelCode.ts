@@ -39,6 +39,32 @@ export interface IKernelSetup {
   readonly datameshUrl: string | null;
   /** The current Auth0 access token, or `null` when signed out. */
   readonly accessToken: string | null;
+  /**
+   * The DATAMESH_TOKEN value from oceanumlab's "Datamesh token" setting (see
+   * `settingToken`), or `null`. A token the user configured wins over the sign-in token.
+   */
+  readonly settingToken?: string | null;
+}
+
+const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
+/**
+ * The DATAMESH_TOKEN value for oceanumlab's "Datamesh token" setting, or `null` when it is empty
+ * or malformed. The setting takes a Datamesh token or a JWT. oceanum sends a value starting with
+ * "Bearer " as an Authorization header and anything else as a Datamesh token, so a JWT gets the
+ * prefix.
+ */
+export function settingToken(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const token = value.trim().replace(/^Bearer\s+/i, '');
+  if (!isValidAccessToken(token)) {
+    return null;
+  }
+  return JWT_PATTERN.test(token) || /^Bearer\s/i.test(value.trim())
+    ? `Bearer ${token}`
+    : token;
 }
 
 /**
@@ -46,11 +72,20 @@ export interface IKernelSetup {
  * It is idempotent: the bootstrap module is created once per kernel and then reused.
  */
 export function kernelSetupCode(setup: IKernelSetup): string {
-  const { accessToken } = setup;
+  const { accessToken, settingToken: configured = null } = setup;
   if (accessToken !== null && !isValidAccessToken(accessToken)) {
     throw new Error('Refusing to send a malformed access token to the kernel');
   }
-  const token = accessToken === null ? null : `Bearer ${accessToken}`;
+  if (
+    configured !== null &&
+    !isValidAccessToken(configured.replace(/^Bearer /, ''))
+  ) {
+    throw new Error(
+      'Refusing to send a malformed Datamesh token to the kernel'
+    );
+  }
+  const token =
+    configured ?? (accessToken === null ? null : `Bearer ${accessToken}`);
   return [
     `def ${SNIPPET_MARKER}():`,
     '    import sys, types',

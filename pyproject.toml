@@ -49,12 +49,17 @@ type="conda"
 fields = ["description", "authors", "urls"]
 
 [tool.hatch.build.targets.sdist]
-artifacts = ["oceanumlab/labextension"]
+artifacts = ["oceanumlab/labextension", "packages/auth-oceanum/labextension"]
 exclude = [".github", "binder"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "oceanumlab/labextension" = "share/jupyter/labextensions/@oceanum/oceanumlab"
 "install.json" = "share/jupyter/labextensions/@oceanum/oceanumlab/install.json"
+# Oceanum.io sign-in is a second prebuilt labextension, built from packages/auth-oceanum.
+# It is separate because it bundles its own React 19 for the Oceanum nav, while oceanumlab
+# itself uses JupyterLab's shared React 18 (see packages/auth-oceanum/package.json).
+"packages/auth-oceanum/labextension" = "share/jupyter/labextensions/@oceanum/auth-oceanum"
+"packages/auth-oceanum/install.json" = "share/jupyter/labextensions/@oceanum/auth-oceanum/install.json"
 "jupyter-config/server-config" = "etc/jupyter/jupyter_server_config.d"
 
 [tool.hatch.build.hooks.version]
@@ -66,8 +71,13 @@ build-function = "hatch_jupyter_builder.npm_builder"
 ensured-targets = [
     "oceanumlab/labextension/static/style.js",
     "oceanumlab/labextension/package.json",
+    "packages/auth-oceanum/labextension/static/style.js",
+    "packages/auth-oceanum/labextension/package.json",
 ]
-skip-if-exists = ["oceanumlab/labextension/static/style.js"]
+skip-if-exists = [
+    "oceanumlab/labextension/static/style.js",
+    "packages/auth-oceanum/labextension/static/style.js",
+]
 
 [tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 build_cmd = "build:prod"

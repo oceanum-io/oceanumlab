@@ -14,21 +14,92 @@ export function themeForScheme(
   return dark ? DARK_THEME : LIGHT_THEME;
 }
 
+type ThemeChangedSlot = (
+  sender: unknown,
+  args: IChangedArgs<string, string | null>
+) => void;
+
 /** The subset of `IThemeManager` used here. */
 export interface IThemes {
   readonly theme: string | null;
   readonly themes: ReadonlyArray<string>;
   readonly themeChanged: {
-    connect(
-      slot: (
-        sender: unknown,
-        args: IChangedArgs<string, string | null>
-      ) => void,
-      thisArg?: unknown
-    ): boolean;
+    connect(slot: ThemeChangedSlot, thisArg?: unknown): boolean;
+    disconnect(slot: ThemeChangedSlot, thisArg?: unknown): boolean;
   };
   setTheme(name: string): Promise<void>;
   isLight(name: string): boolean;
+}
+
+/** Whether a theme is light or dark. Safe for themes that are not registered yet. */
+export function schemeOfTheme(
+  themes: Pick<IThemes, 'themes' | 'isLight'>,
+  theme: string
+): 'light' | 'dark' {
+  // IThemeManager.isLight throws for a theme that has not been registered.
+  if (theme === LIGHT_THEME || theme === DARK_THEME) {
+    return theme === LIGHT_THEME ? 'light' : 'dark';
+  }
+  return themes.themes.includes(theme) && !themes.isLight(theme)
+    ? 'dark'
+    : 'light';
+}
+
+/** Mantine's colour scheme value. */
+export type MantineScheme = 'light' | 'dark' | 'auto';
+
+/** Structurally Mantine's `MantineColorSchemeManager`, kept here free of React imports. */
+export interface IColorSchemeManager {
+  get(defaultValue: MantineScheme): MantineScheme;
+  set(value: MantineScheme): void;
+  subscribe(onUpdate: (scheme: MantineScheme) => void): void;
+  unsubscribe(): void;
+  clear(): void;
+}
+
+/**
+ * A Mantine colour scheme manager backed by the JupyterLab theme, so the Oceanum nav and the
+ * notebook always agree: the nav's light/dark toggle switches the notebook theme, and a theme
+ * chosen in the notebook updates the nav.
+ */
+export function themeColorSchemeManager(
+  themes: IThemes,
+  prefersDark: () => boolean
+): IColorSchemeManager {
+  let slot: ThemeChangedSlot | null = null;
+  return {
+    get: defaultValue =>
+      themes.theme ? schemeOfTheme(themes, themes.theme) : defaultValue,
+    set: value => {
+      const target = themeForScheme(value, prefersDark());
+      // Mantine calls set() with every scheme subscribe() reports, so a theme that already has
+      // this scheme (e.g. JupyterLab Dark) must be kept, not swapped for the Oceanum one.
+      if (
+        themes.theme &&
+        schemeOfTheme(themes, themes.theme) === schemeOfTheme(themes, target)
+      ) {
+        return;
+      }
+      if (themes.theme !== target && themes.themes.includes(target)) {
+        void themes.setTheme(target);
+      }
+    },
+    subscribe: onUpdate => {
+      if (slot) {
+        themes.themeChanged.disconnect(slot);
+      }
+      slot = (_, change) => onUpdate(schemeOfTheme(themes, change.newValue));
+      themes.themeChanged.connect(slot);
+    },
+    unsubscribe: () => {
+      if (slot) {
+        themes.themeChanged.disconnect(slot);
+        slot = null;
+      }
+    },
+    // The preference lives in the JupyterLab theme setting, not in Mantine's storage.
+    clear: () => undefined
+  };
 }
 
 export interface IColorSchemeSyncOptions {
@@ -127,13 +198,7 @@ export class ColorSchemeSync {
   }
 
   private _schemeOf(theme: string): 'light' | 'dark' {
-    // IThemeManager.isLight throws for a theme that has not been registered.
-    if (theme === LIGHT_THEME || theme === DARK_THEME) {
-      return theme === LIGHT_THEME ? 'light' : 'dark';
-    }
-    return this._themes.themes.includes(theme) && !this._themes.isLight(theme)
-      ? 'dark'
-      : 'light';
+    return schemeOfTheme(this._themes, theme);
   }
 
   private _auth: IOceanumAuth;

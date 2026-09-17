@@ -7,7 +7,9 @@ module.exports = {
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: 'tsconfig.json',
+    // The sign-in extension is a separate TypeScript project (it compiles against its
+    // own React 19 and a different module resolution), so name its tsconfig too.
+    project: ['tsconfig.json', 'packages/auth-oceanum/tsconfig.json'],
     sourceType: 'module'
   },
   plugins: ['@typescript-eslint'],

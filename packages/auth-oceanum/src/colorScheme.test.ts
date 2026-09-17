@@ -1,4 +1,5 @@
 import { Signal } from '@lumino/signaling';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { IChangedArgs } from '@jupyterlab/coreutils';
 
@@ -7,9 +8,11 @@ import {
   DARK_THEME,
   IThemes,
   LIGHT_THEME,
+  schemeOfTheme,
+  themeColorSchemeManager,
   themeForScheme
-} from '../auth/colorScheme';
-import { IOceanumAuth, IOceanumUser } from '../auth/tokens';
+} from './colorScheme';
+import { IOceanumAuth, IOceanumUser } from './tokens';
 
 function user(
   colorScheme: IOceanumUser['colorScheme'],
@@ -31,12 +34,8 @@ function setup(
   const auth = {
     user: null as IOceanumUser | null,
     urls: { datamesh: '', specs: '', manage: 'https://manage.oceanum.tech' },
-    // The signal's owner is never read by these tests; it only has to be an
-    // IOceanumAuth to satisfy the type parameter.
-    userChanged: new Signal<IOceanumAuth, IOceanumUser | null>(
-      {} as IOceanumAuth
-    ),
-    getAccessToken: jest.fn(async () => 'jwt')
+    userChanged: new Signal<IOceanumAuth, IOceanumUser | null>({}),
+    getAccessToken: vi.fn(async () => 'jwt')
   };
   const themeChanged = new Signal<unknown, IChangedArgs<string, string | null>>(
     {}
@@ -54,13 +53,13 @@ function setup(
       }
       return !name.includes('Dark');
     },
-    setTheme: jest.fn(async (name: string) => {
+    setTheme: vi.fn(async (name: string) => {
       const oldValue = themes.theme;
       themes.theme = name;
       themeChanged.emit({ name: 'theme', oldValue, newValue: name });
     })
   };
-  const fetch = jest.fn(async () => new Response(null, { status: 200 }));
+  const fetch = vi.fn(async () => new Response(null, { status: 200 }));
   new ColorSchemeSync({
     auth: auth as unknown as IOceanumAuth,
     themes,
@@ -158,5 +157,74 @@ describe('ColorSchemeSync', () => {
     await flush();
 
     expect(themes.setTheme).not.toHaveBeenCalled();
+  });
+});
+
+describe('schemeOfTheme', () => {
+  it('is safe for a theme that is not registered yet', () => {
+    const { themes } = setup(LIGHT_THEME, []);
+    expect(schemeOfTheme(themes, DARK_THEME)).toBe('dark');
+    expect(schemeOfTheme(themes, 'Some Future Theme')).toBe('light');
+  });
+
+  it('asks the theme manager about other registered themes', () => {
+    const { themes } = setup();
+    expect(schemeOfTheme(themes, 'JupyterLab Dark')).toBe('dark');
+  });
+});
+
+describe('themeColorSchemeManager', () => {
+  it('reads the scheme from the current notebook theme', () => {
+    const { themes } = setup(DARK_THEME);
+    expect(themeColorSchemeManager(themes, () => false).get('light')).toBe(
+      'dark'
+    );
+    const unset = { ...themes, theme: null };
+    expect(themeColorSchemeManager(unset, () => false).get('light')).toBe(
+      'light'
+    );
+  });
+
+  it("switches the notebook theme when the nav's toggle sets a scheme", () => {
+    const { themes } = setup(LIGHT_THEME);
+    const manager = themeColorSchemeManager(themes, () => true);
+
+    manager.set('dark');
+    expect(themes.theme).toBe(DARK_THEME);
+    manager.set('auto'); // follows the OS, which prefers dark here: already dark
+    expect(themes.setTheme).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a non-Oceanum theme whose scheme Mantine echoes back through set()', async () => {
+    const { themes, userChangesTheme } = setup(LIGHT_THEME);
+    const manager = themeColorSchemeManager(themes, () => false);
+    // Mantine's subscribe handler is setColorScheme, which calls manager.set().
+    manager.subscribe(scheme => manager.set(scheme));
+
+    await userChangesTheme('JupyterLab Dark');
+
+    expect(themes.theme).toBe('JupyterLab Dark');
+    expect(themes.setTheme).toHaveBeenCalledTimes(1); // the user's change only
+  });
+
+  it('does nothing for a theme that is not registered', () => {
+    const { themes } = setup('JupyterLab Light', ['JupyterLab Light']);
+    themeColorSchemeManager(themes, () => false).set('dark');
+    expect(themes.setTheme).not.toHaveBeenCalled();
+  });
+
+  it('reports theme changes made in the notebook, and stops when unsubscribed', async () => {
+    const { themes, userChangesTheme } = setup(LIGHT_THEME);
+    const manager = themeColorSchemeManager(themes, () => false);
+    const updates: string[] = [];
+    manager.subscribe(scheme => updates.push(`first:${scheme}`));
+    // Mantine re-subscribes on remount: the old listener must not keep firing.
+    manager.subscribe(scheme => updates.push(scheme));
+
+    await userChangesTheme('JupyterLab Dark');
+    manager.unsubscribe();
+    await userChangesTheme(LIGHT_THEME);
+
+    expect(updates).toEqual(['dark']);
   });
 });

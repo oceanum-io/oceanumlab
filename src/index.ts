@@ -18,8 +18,7 @@ import { requestAPI } from './handler';
 import { ChatRouter, ChatRouterError, ChatMessage } from './chatRouter';
 import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
-import { authPlugins } from './auth/plugin';
-import { IOceanumAuth } from './auth/tokens';
+import { IOceanumAuth } from '@oceanum/auth-oceanum';
 
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
@@ -388,8 +387,4 @@ export const oceanum_ai_extension: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default [
-  ...authPlugins,
-  datamesh_connect_extension,
-  oceanum_ai_extension
-];
+export default [datamesh_connect_extension, oceanum_ai_extension];
