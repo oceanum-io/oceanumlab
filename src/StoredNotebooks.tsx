@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { IOceanumAuth } from '@oceanum/auth-oceanum';
+import { IOceanumAuth } from './auth/tokens';
 import { ISpecSummary, listNotebooks, partitionNotebooks } from './specStore';
 
 export interface IStoredNotebooksProps {
