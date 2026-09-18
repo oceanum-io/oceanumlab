@@ -29,6 +29,7 @@ import {
   ISpecRecord,
   METADATA_KEY,
   notebookFromRecord,
+  notebookNamesFor,
   OCEANUM_DIR,
   partitionSummaries,
   QUERY_PARAM,
@@ -109,6 +110,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     // Notebooks whose routed saves stopped reaching Oceanum, and the sign-in they
     // stopped under: signing in again gives every notebook another go.
     const muted = new WeakMap<NotebookPanel, number>();
+    // Notebooks already reported as failing for a passing reason, so a flaky network
+    // does not raise the same notification on every autosave.
+    const warnedTransient = new WeakSet<NotebookPanel>();
     let signInGeneration = 0;
     let warnedSignedOut = false;
 
@@ -118,7 +122,19 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     // --- what a command acts on ---------------------------------------------------
 
-    /** The record id under the pointer, when a context menu is open on a Notebooks row. */
+    /**
+     * Where a command was invoked from. The context menus pass this; the File menu, the
+     * palette and a keyboard shortcut pass nothing, and must not be answered with
+     * whatever happens to have been right-clicked earlier — JupyterLab keeps the last
+     * contextmenu event for the life of the page and never clears it, so the hit tests
+     * below answer long after their menu has gone.
+     */
+    const sourceOf = (
+      args: ReadonlyPartialJSONObject
+    ): 'row' | 'notebook' | null =>
+      args.source === 'row' || args.source === 'notebook' ? args.source : null;
+
+    /** The record id under the pointer; only ask from the Notebooks tab's own menu. */
     const hitTestSpecId = (): string | null => {
       const node = app.contextMenuHitTest(candidate =>
         candidate.hasAttribute(SPEC_ID_ATTRIBUTE)
@@ -128,16 +144,22 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     };
 
     /**
-     * The notebook a command acts on: the one whose tab is under the pointer when a
-     * context menu is open there, or else the current notebook.
+     * The notebook a command acts on: from a notebook's or a tab's context menu, the one
+     * under the pointer; anywhere else the current notebook, and only that.
      */
-    const targetNotebook = (): NotebookPanel | null => {
-      const node = app.contextMenuHitTest(candidate => !!candidate.dataset.id);
-      const id = node?.dataset.id;
-      if (id) {
-        const panel = tracker.find(candidate => candidate.id === id);
-        if (panel) {
-          return panel;
+    const targetNotebook = (
+      source: 'row' | 'notebook' | null
+    ): NotebookPanel | null => {
+      if (source === 'notebook') {
+        const node = app.contextMenuHitTest(
+          candidate => !!candidate.dataset.id
+        );
+        const id = node?.dataset.id;
+        if (id) {
+          const panel = tracker.find(candidate => candidate.id === id);
+          if (panel) {
+            return panel;
+          }
         }
       }
       const widget = tracker.currentWidget;
@@ -163,11 +185,11 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       if (isSpecId(args.id)) {
         return args.id;
       }
-      const hit = hitTestSpecId();
-      if (hit) {
-        return hit;
+      const source = sourceOf(args);
+      if (source === 'row') {
+        return hitTestSpecId();
       }
-      const panel = targetNotebook();
+      const panel = targetNotebook(source);
       return panel ? (linkOf(panel)?.spec_id ?? null) : null;
     };
 
@@ -266,6 +288,35 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       return dir.content.map((item: { name: string }) => item.name);
     }
 
+    /**
+     * The file in the Oceanum folder already holding this record, or null. Only the
+     * names the record itself could have been written to are read.
+     */
+    async function pathHoldingRecord(
+      s: IStore,
+      record: ISpecRecord,
+      names: readonly string[]
+    ): Promise<string | null> {
+      for (const name of notebookNamesFor(record.name, names)) {
+        const path = `${OCEANUM_DIR}/${name}`;
+        try {
+          const file = await docManager.services.contents.get(path, {
+            content: true
+          });
+          const metadata = (file.content as INotebookContent | null)?.metadata;
+          if (
+            readLink(metadata?.[METADATA_KEY], s.specsUrl)?.spec_id ===
+            record.id
+          ) {
+            return path;
+          }
+        } catch {
+          // Unreadable or gone: not the copy we are looking for.
+        }
+      }
+      return null;
+    }
+
     /** Write a record to the local drive as `Oceanum/<name>.ipynb` and open it. */
     async function openRecord(s: IStore, record: ISpecRecord): Promise<void> {
       // Already open: bring it forward rather than writing a second copy.
@@ -275,7 +326,13 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         return;
       }
       const content = notebookFromRecord(record, s.specsUrl);
-      const path = uniqueNotebookPath(record.name, await oceanumFolderNames());
+      const names = await oceanumFolderNames();
+      // Reuse the file an earlier session left for this record. A second copy would be
+      // named "<name> (1)", and a record takes its name from the file on every save, so
+      // opening the same notebook twice would quietly rename it on Oceanum.
+      const path =
+        (await pathHoldingRecord(s, record, names)) ??
+        uniqueNotebookPath(record.name, names);
       await docManager.services.contents.save(path, {
         type: 'notebook',
         format: 'json',
@@ -364,6 +421,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         const id = await saveRecord(store, panel, quiet);
         if (id !== null) {
           muted.delete(panel);
+          warnedTransient.delete(panel);
         }
         return id;
       } finally {
@@ -382,6 +440,15 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     /** Stop routed saves of a notebook until the next explicit save or sign-in. */
     function mute(panel: NotebookPanel): void {
       muted.set(panel, signInGeneration);
+    }
+
+    /** Whether repeating this save unchanged would fail for the same reason. */
+    function isPermanent(error: unknown): boolean {
+      return (
+        error instanceof SpecStoreError &&
+        error.kind !== 'network' &&
+        error.kind !== 'server'
+      );
     }
 
     async function saveRecord(
@@ -446,7 +513,18 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         }
       } catch (error) {
         if (quiet) {
-          mute(panel);
+          // A reason that will not pass on its own (no access, gone, signed out) mutes
+          // this notebook until the user saves it themselves or signs in again. A
+          // passing one (network, 5xx) does not: the next save simply tries again, and
+          // the warning is raised once rather than on every autosave until one works.
+          if (isPermanent(error)) {
+            mute(panel);
+          } else if (warnedTransient.has(panel)) {
+            console.warn('Save to Oceanum failed again', error);
+            return null;
+          } else {
+            warnedTransient.add(panel);
+          }
         }
         await reportError('Save to Oceanum failed', error, quiet);
         return null;
@@ -848,40 +926,47 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     /** Whether the command can act on the pointer's row, the target notebook, or both. */
     const enabledFor = (
-      wants: 'row-or-notebook' | 'row-or-link' | 'notebook'
+      wants: 'row-or-notebook' | 'row-or-link' | 'notebook',
+      args: ReadonlyPartialJSONObject
     ): boolean => {
       if (!signedIn()) {
         return false;
       }
-      if (wants !== 'notebook' && hitTestSpecId() !== null) {
-        return true;
+      const source = sourceOf(args);
+      if (wants !== 'notebook' && source === 'row') {
+        return hitTestSpecId() !== null;
       }
-      const panel = targetNotebook();
+      const panel = targetNotebook(source);
       if (panel === null) {
         return false;
       }
       return wants === 'row-or-link' ? linkOf(panel) !== null : true;
     };
 
+    /** The id a row-sourced command acts on, or null anywhere else. */
+    const rowSpecId = (args: ReadonlyPartialJSONObject): string | null =>
+      isSpecId(args.id)
+        ? args.id
+        : sourceOf(args) === 'row'
+          ? hitTestSpecId()
+          : null;
+
     app.commands.addCommand(CommandIDs.open, {
       // On a Notebooks row the command is plainly "Open"; elsewhere it opens a picker.
-      label: args =>
-        isSpecId(args.id) || hitTestSpecId()
-          ? 'Open'
-          : label('Open from Oceanum…')(),
+      label: args => (rowSpecId(args) ? 'Open' : label('Open from Oceanum…')()),
       caption: 'Open a notebook saved on Oceanum.io',
       isEnabled: () => signedIn(),
       execute: async args => {
-        const id = isSpecId(args.id) ? args.id : hitTestSpecId();
+        const id = rowSpecId(args);
         await (id ? openById(id) : openFromOceanum());
       }
     });
     app.commands.addCommand(CommandIDs.save, {
       label: label('Save to Oceanum'),
       caption: 'Save the notebook to Oceanum.io',
-      isEnabled: () => enabledFor('notebook'),
-      execute: async () => {
-        const panel = targetNotebook();
+      isEnabled: args => enabledFor('notebook', args),
+      execute: async args => {
+        const panel = targetNotebook(sourceOf(args));
         if (panel) {
           await saveToOceanum(panel);
         }
@@ -890,14 +975,14 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     app.commands.addCommand(CommandIDs.share, {
       label: label('Share on Oceanum…'),
       caption: 'Share the notebook through Oceanum.io',
-      isEnabled: () => enabledFor('row-or-notebook'),
+      isEnabled: args => enabledFor('row-or-notebook', args),
       execute: async args => {
-        const id = isSpecId(args.id) ? args.id : hitTestSpecId();
+        const id = rowSpecId(args);
         if (id) {
           await shareRecord(id);
           return;
         }
-        const panel = targetNotebook();
+        const panel = targetNotebook(sourceOf(args));
         if (panel) {
           await shareOnOceanum(panel);
         }
@@ -905,11 +990,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     });
     app.commands.addCommand(CommandIDs.rename, {
       label: args =>
-        isSpecId(args.id) || hitTestSpecId()
-          ? 'Rename…'
-          : label('Rename on Oceanum…')(),
+        rowSpecId(args) ? 'Rename…' : label('Rename on Oceanum…')(),
       caption: 'Rename the notebook on Oceanum.io',
-      isEnabled: () => enabledFor('row-or-link'),
+      isEnabled: args => enabledFor('row-or-link', args),
       execute: async args => {
         const id = targetSpecId(args);
         if (id) {
@@ -919,11 +1002,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     });
     app.commands.addCommand(CommandIDs.delete, {
       label: args =>
-        isSpecId(args.id) || hitTestSpecId()
-          ? 'Delete'
-          : label('Delete from Oceanum')(),
+        rowSpecId(args) ? 'Delete' : label('Delete from Oceanum')(),
       caption: 'Delete the notebook from Oceanum.io',
-      isEnabled: () => enabledFor('row-or-link'),
+      isEnabled: args => enabledFor('row-or-link', args),
       execute: async args => {
         const id = targetSpecId(args);
         if (id) {
@@ -956,7 +1037,12 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         CommandIDs.rename,
         CommandIDs.delete
       ].entries()) {
-        app.contextMenu.addItem({ command, selector, rank: 46 + i });
+        app.contextMenu.addItem({
+          command,
+          args: { source: 'notebook' },
+          selector,
+          rank: 46 + i
+        });
       }
     }
     // Right-click on a row of the Notebooks tab.
@@ -968,6 +1054,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     ].entries()) {
       app.contextMenu.addItem({
         command,
+        args: { source: 'row' },
         selector: NOTEBOOK_ITEM_SELECTOR,
         rank: i
       });

@@ -228,6 +228,45 @@ export function uniqueNotebookPath(
 }
 
 /**
+ * The names in `existing` that `uniqueNotebookPath` could have given a record called
+ * `name`, in the order it would have tried them: `<base>.ipynb`, then `<base> (1).ipynb`,
+ * `<base> (2).ipynb` and so on.
+ *
+ * Opening a record looks through these for the copy a previous session left, so the same
+ * record keeps one local file. Without that the second copy is named `<base> (1)`, and
+ * since a record takes its name from the file on every save, opening a notebook twice
+ * would quietly rename it on Oceanum.
+ */
+export function notebookNamesFor(
+  name: string,
+  existing: Iterable<string>
+): string[] {
+  const base = sanitizeName(name);
+  const prefix = `${base} (`;
+  const suffix = ').ipynb';
+  const plain: string[] = [];
+  const numbered: { name: string; index: number }[] = [];
+  for (const candidate of existing) {
+    if (candidate === `${base}.ipynb`) {
+      plain.push(candidate);
+      continue;
+    }
+    if (!candidate.startsWith(prefix) || !candidate.endsWith(suffix)) {
+      continue;
+    }
+    const index = candidate.slice(
+      prefix.length,
+      candidate.length - suffix.length
+    );
+    if (/^\d+$/.test(index)) {
+      numbered.push({ name: candidate, index: Number(index) });
+    }
+  }
+  numbered.sort((a, b) => a.index - b.index);
+  return [...plain, ...numbered.map(entry => entry.name)];
+}
+
+/**
  * Split a listing into the caller's own notebooks and the rest, newest first.
  *
  * The store only sends `creator` on records the caller created, so anything else it

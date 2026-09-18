@@ -158,7 +158,22 @@ export function StoredNotebooks({
     };
     return (
       <div className="oceanum-text-empty">
-        <a onClick={signIn}>Sign in</a> to Oceanum.io to see your notebooks.
+        {/* A link rather than a button to match the panel's other actions, so it
+            carries the role and the keys a button would have. */}
+        <a
+          role="button"
+          tabIndex={0}
+          onClick={signIn}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              signIn();
+            }
+          }}
+        >
+          Sign in
+        </a>{' '}
+        to Oceanum.io to see your notebooks.
       </div>
     );
   }
