@@ -293,6 +293,22 @@ def test_device_sign_in_is_the_default_and_publishes_production():
     assert published["oceanumDomain"] == "oceanum.io"
 
 
+def test_local_file_management_is_the_default():
+    app = _FakeServerApp(Config())
+    _configure_sign_in(app)
+
+    published = json.loads(app.web_app.settings["page_config_data"][SERVER_AUTH_OPTION])
+    assert published["fileManagement"] == "local"
+
+
+def test_oceanum_file_management_is_published():
+    app = _FakeServerApp(Config({"OceanumLab": {"file_management": "oceanum"}}))
+    _configure_sign_in(app)
+
+    published = json.loads(app.web_app.settings["page_config_data"][SERVER_AUTH_OPTION])
+    assert published["fileManagement"] == "oceanum"
+
+
 def test_sign_in_off_publishes_nothing():
     app = _FakeServerApp(Config({"OceanumLab": {"sign_in": "off"}}))
 

@@ -88,6 +88,23 @@ class OceanumLab(Configurable):
         """,
     )
 
+    file_management = Enum(
+        ["local", "oceanum"],
+        default_value="local",
+        config=True,
+        help="""Whose file management this JupyterLab shows.
+
+        "local" (the default) keeps JupyterLab's file browser and File menu, with
+        Open/Save/Share on Oceanum alongside them.
+
+        "oceanum" makes Oceanum.io the only file management, as on notebook.oceanum.io:
+        the file browser and the File menu's local-file entries are hidden, and every
+        save of a notebook (Ctrl+S, the toolbar, Save All, autosave) is also pushed to
+        the Oceanum spec store. The local files remain underneath as working copies.
+        Needs sign_in.
+        """,
+    )
+
 
 def _configure_sign_in(server_app):
     """Publish this server's sign-in mode to the page; return the DeviceAuth, if any.
@@ -115,6 +132,7 @@ def _configure_sign_in(server_app):
                 "clientId": environment["clientId"],
                 "oceanumDomain": environment.get("oceanumDomain", ""),
                 "urls": environment.get("urls", {}),
+                "fileManagement": config.file_management,
             }
         )
         server_app.log.info(

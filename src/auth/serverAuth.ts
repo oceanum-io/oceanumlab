@@ -119,6 +119,7 @@ export function readServerAuthOption(
     oceanumDomain:
       typeof config.oceanumDomain === 'string' ? config.oceanumDomain : '',
     signInRedirect: false,
+    fileManagement: config.fileManagement === 'oceanum' ? 'oceanum' : 'local',
     urls
   };
 }
