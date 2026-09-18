@@ -1,4 +1,10 @@
-import { isSpecId, ISpecBody, ISpecRecord, ISpecSummary } from './notebook';
+import {
+  isSpecId,
+  ISpecBody,
+  ISpecPatch,
+  ISpecRecord,
+  ISpecSummary
+} from './notebook';
 
 export type ErrorKind =
   | 'signed-out'
@@ -8,6 +14,7 @@ export type ErrorKind =
   | 'too-large'
   | 'network'
   | 'invalid'
+  | 'unsupported'
   | 'server';
 
 const MESSAGES: Record<Exclude<ErrorKind, 'server'>, string> = {
@@ -19,7 +26,8 @@ const MESSAGES: Record<Exclude<ErrorKind, 'server'>, string> = {
   'too-large': 'The notebook is too large for Oceanum.io (32 MiB limit).',
   network:
     'Could not reach Oceanum.io. Check your connection; very large notebooks can also fail this way.',
-  invalid: 'Oceanum.io returned an unexpected response.'
+  invalid: 'Oceanum.io returned an unexpected response.',
+  unsupported: 'This Oceanum.io service does not offer that operation yet.'
 };
 
 /** A spec store failure with a message that is safe to show to the user. */
@@ -48,6 +56,9 @@ export function errorForStatus(status: number): SpecStoreError {
       return new SpecStoreError('forbidden', status);
     case 404:
       return new SpecStoreError('not-found', status);
+    case 405:
+      // The route is there but not this method: a store from before it had PATCH.
+      return new SpecStoreError('unsupported', status);
     case 413:
       return new SpecStoreError('too-large', status);
     default:
@@ -140,6 +151,46 @@ export class SpecStoreClient {
         body: pick(body)
       })
     );
+  }
+
+  /**
+   * Change some of a record's fields and leave the rest as they are. Needs the same
+   * write access as `update`, which the store enforces a patch as.
+   */
+  async patch(id: string, changes: ISpecPatch): Promise<ISpecRecord> {
+    if (Object.keys(changes).length === 0) {
+      // The store answers an empty patch with 400; there is nothing to send anyway.
+      throw new SpecStoreError('invalid');
+    }
+    return this._record(
+      await this._request('PATCH', this._url(id), {
+        auth: 'required',
+        body: changes
+      })
+    );
+  }
+
+  /**
+   * Give a record a new name, without sending the notebook back with it.
+   *
+   * Falls back to reading the record and putting it back where the store has no PATCH
+   * (production had none when this was written). That fallback races another writer's
+   * change to the notebook, which is the whole reason to prefer a patch.
+   */
+  async rename(id: string, name: string): Promise<ISpecRecord> {
+    try {
+      return await this.patch(id, { name });
+    } catch (error) {
+      if (!(error instanceof SpecStoreError) || error.kind !== 'unsupported') {
+        throw error;
+      }
+      const record = await this.get(id);
+      return this.update(id, {
+        name,
+        description: record.description,
+        spec: record.spec as ISpecBody['spec']
+      });
+    }
   }
 
   /** Delete a record (requires admin access to it). */

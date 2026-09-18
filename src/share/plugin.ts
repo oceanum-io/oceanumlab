@@ -764,20 +764,18 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       try {
         if (open) {
           // The record takes its name from the local file on every save, so the file
-          // has to follow or the next save would put the old name back.
+          // has to follow or the next save would put the old name back. It moves first:
+          // if the record is what fails, the next save renames it anyway and the two
+          // converge on what was asked for, where the other order would undo itself.
           const path = open.context.path;
           const dir = path.includes('/')
             ? path.slice(0, path.lastIndexOf('/') + 1)
             : '';
           await docManager.rename(path, `${dir}${sanitizeName(name)}.ipynb`);
-          await saveToOceanum(open);
-        } else {
-          await store.client.update(id, {
-            name,
-            description: record.description,
-            spec: record.spec as INotebookContent
-          });
         }
+        // Only the name goes: the notebook stays as it is, so this cannot overwrite a
+        // change another writer made to it while the dialog was open.
+        await store.client.rename(id, name);
       } catch (error) {
         await reportError('Rename on Oceanum failed', error);
         return;

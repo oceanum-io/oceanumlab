@@ -140,6 +140,7 @@ interface IHarness {
   bodies: Record<string, unknown>[];
   saved: string[];
   opened: string[];
+  renamed: [string, string][];
   /** What a right-click last landed on; never cleared, as JupyterLab does not. */
   setHit: (node: HTMLElement | null) => void;
   setCurrent: (panel: NotebookPanel | null) => void;
@@ -157,6 +158,7 @@ function activate(
   const { calls, bodies, fetcher } = store();
   const saved: string[] = [];
   const opened: string[] = [];
+  const renamed: [string, string][] = [];
   const panels = options.panels ?? [];
   let current = options.current ?? null;
   let hit: HTMLElement | null = null;
@@ -224,7 +226,9 @@ function activate(
       opened.push(path);
       return {};
     },
-    rename: async (): Promise<void> => undefined,
+    rename: async (from: string, to: string): Promise<void> => {
+      renamed.push([from, to]);
+    },
     deleteFile: async (): Promise<void> => undefined
   } as unknown as IDocumentManager;
 
@@ -262,6 +266,7 @@ function activate(
     bodies,
     saved,
     opened,
+    renamed,
     setHit: node => {
       hit = node;
     },
@@ -272,6 +277,33 @@ function activate(
     }
   };
 }
+
+describe('renaming a record', () => {
+  it('patches just the name, and moves the open notebook to match', async () => {
+    const open = panel('panel-a', 'notebooks/Alpha.ipynb', ID_A);
+    const harness = activate({ current: open, panels: [open] });
+    mockDialog.value = 'Renamed';
+
+    await harness.commands.execute(CommandIDs.rename, { id: ID_A });
+
+    // Read once for the dialog's current name, then one patch. No PUT: the notebook
+    // is not sent back, so a change another writer made to it cannot be overwritten.
+    expect(harness.calls).toEqual([`GET ${ID_A}`, `PATCH ${ID_A}`]);
+    expect(harness.bodies).toEqual([{ name: 'Renamed' }]);
+    expect(harness.renamed).toEqual([
+      ['notebooks/Alpha.ipynb', 'notebooks/Renamed.ipynb']
+    ]);
+  });
+
+  it('leaves everything alone when the name is unchanged', async () => {
+    const harness = activate();
+    mockDialog.value = 'Alpha';
+
+    await harness.commands.execute(CommandIDs.rename, { id: ID_A });
+
+    expect(harness.calls).toEqual([`GET ${ID_A}`]);
+  });
+});
 
 /** A Notebooks tab row, as StoredNotebooks renders it. */
 function row(id: string): HTMLElement {
