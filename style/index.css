@@ -258,8 +258,13 @@
   white-space: nowrap;
 }
 
+/* The thread takes only the height it needs, so the input sits under the last message
+ * rather than at the foot of the tab with a gap between them. `min-height: 0` is what
+ * lets it shrink past its content once the thread is taller than the space there is:
+ * without it a flex item refuses to, and the input would be pushed out of the panel. */
 .oceanum-ai-chat-messages {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 6px 8px;
   display: flex;
