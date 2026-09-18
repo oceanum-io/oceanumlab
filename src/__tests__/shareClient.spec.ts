@@ -133,6 +133,78 @@ describe('SpecStoreClient', () => {
     expect(call().body).toEqual(body);
   });
 
+  it('patches only the fields it is given', async () => {
+    const { client, call } = setup(() => json(record()));
+    await client.patch(ID, { name: 'Renamed' });
+    expect(call()).toEqual({
+      url: `https://specs.example.com/specs/notebook/${ID}`,
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer tok',
+        'Content-Type': 'application/json'
+      },
+      body: { name: 'Renamed' }
+    });
+  });
+
+  it('refuses a patch that carries nothing, without calling the server', async () => {
+    // The store answers an empty patch with 400, and there is nothing to send.
+    const { client, fetch } = setup(() => json(record()));
+    await expect(client.patch(ID, {})).rejects.toMatchObject({
+      kind: 'invalid'
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('renames with a single patch, leaving the notebook alone', async () => {
+    const { client, call, fetch } = setup(() => json(record()));
+    await client.rename(ID, 'Renamed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(call().method).toBe('PATCH');
+    expect(call().body).toEqual({ name: 'Renamed' });
+  });
+
+  it('renames by reading and putting back where the store has no PATCH', async () => {
+    // Production served no PATCH when this was written; a store without it answers 405.
+    const responses: Record<string, () => Response> = {
+      PATCH: () => json('Method Not Allowed', 405),
+      GET: () => json({ ...record(), description: 'Wave stats' }),
+      PUT: () => json(record())
+    };
+    const fetch = jest.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        responses[init?.method ?? 'GET']()
+    );
+    const client = new SpecStoreClient({
+      specsUrl: 'https://specs.example.com',
+      getAccessToken: async () => 'tok',
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await client.rename(ID, 'Renamed');
+
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual([
+      'PATCH',
+      'GET',
+      'PUT'
+    ]);
+    const put = JSON.parse(String(fetch.mock.calls[2][1]?.body));
+    // The name changes; everything else goes back as it was read.
+    expect(put).toEqual({
+      name: 'Renamed',
+      description: 'Wave stats',
+      spec: notebook
+    });
+  });
+
+  it('does not fall back for a failure that is not a missing method', async () => {
+    const { client, fetch } = setup(() => json('Forbidden', 403));
+    await expect(client.rename(ID, 'Renamed')).rejects.toMatchObject({
+      kind: 'forbidden'
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('deletes with DELETE to the record URL, and needs sign-in', async () => {
     const { client, call } = setup(() => noContent());
     await client.remove(ID);
@@ -197,6 +269,7 @@ describe('SpecStoreClient', () => {
     [400, 'expired', 'Your Oceanum session has expired, sign in again.'],
     [403, 'forbidden', /another organisation/],
     [404, 'not-found', /no longer exists/],
+    [405, 'unsupported', /does not offer that operation/],
     [413, 'too-large', /too large/],
     [500, 'server', 'Oceanum.io returned an error (HTTP 500).']
   ])('maps HTTP %i to %s', async (status, kind, message) => {
