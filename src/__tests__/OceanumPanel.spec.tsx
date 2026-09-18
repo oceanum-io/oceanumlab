@@ -11,8 +11,27 @@ const icon = new LabIcon({
   svgstr: '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
 });
 
-function panel(): DatameshConnectWidget {
+interface IPanelOptions {
+  /** The `datameshToken` setting value. */
+  token?: string;
+  /** Register the host's sign-in commands, and say whether someone is signed in. */
+  signedIn?: boolean;
+}
+
+function panel(options: IPanelOptions = {}): DatameshConnectWidget {
   const commands = new CommandRegistry();
+  if (options.signedIn !== undefined) {
+    // What the host provides: sign-out is visible only while signed in, which is how
+    // the sidebar reads the state without running anything.
+    commands.addCommand('oceanum-auth:sign-out', {
+      execute: () => undefined,
+      isVisible: () => options.signedIn === true
+    });
+    commands.addCommand('oceanum-auth:access-token', {
+      execute: () => null,
+      isVisible: () => false
+    });
+  }
   const app = {
     shell: { currentWidget: null },
     commands
@@ -24,7 +43,7 @@ function panel(): DatameshConnectWidget {
     openDatameshUI: (): void => undefined,
     datameshUiUrl: () => 'https://ui.datamesh.example.com',
     datameshUiFrame: (): Window | null => null,
-    datameshToken: () => '',
+    datameshToken: () => options.token ?? '',
     aiBackendUrl: () => 'https://ai.example.com',
     settingsChanged: new Signal<unknown, void>({}),
     commands,
@@ -33,8 +52,10 @@ function panel(): DatameshConnectWidget {
   } as unknown as ConstructorParameters<typeof DatameshConnectWidget>[0]);
 }
 
-async function mount(): Promise<DatameshConnectWidget> {
-  const widget = panel();
+async function mount(
+  options: IPanelOptions = {}
+): Promise<DatameshConnectWidget> {
+  const widget = panel(options);
   Widget.attach(widget, document.body);
   await new Promise(resolve => setTimeout(resolve, 100));
   return widget;
@@ -46,6 +67,19 @@ async function mount(): Promise<DatameshConnectWidget> {
  * touches the Datamesh surface, so nothing else here would notice if rearranging the
  * two lost one of them.
  */
+beforeAll(() => {
+  // The AI chat scrolls to its last message, and every pane renders whether or not it
+  // is the selected one. jsdom has no scrollIntoView, and the error would come back as
+  // React unmounting the whole sidebar.
+  (Element.prototype as unknown as Record<string, unknown>).scrollIntoView =
+    (): void => undefined;
+});
+
+const tabLabels = (widget: DatameshConnectWidget): (string | null)[] =>
+  Array.from(widget.node.querySelectorAll('[role="tab"]')).map(
+    node => node.textContent
+  );
+
 describe('the Oceanum panel', () => {
   it('offers no Oceanum AI tab when the chat has no credential', async () => {
     // AIChatPanel renders nothing without one, so a labelled tab would open on the
@@ -57,6 +91,28 @@ describe('the Oceanum panel', () => {
 
     expect(labels).toEqual(['Notebooks', 'Datamesh']);
     expect(widget.node.querySelector('#oceanum-tabpanel-ai')).toBeNull();
+
+    widget.dispose();
+  });
+
+  it('offers no Oceanum AI tab for a pasted token alone, until someone signs in', async () => {
+    // The token would reach the backend, but the tab waits for a sign-in.
+    const withToken = await mount({ token: 'a-datamesh-token' });
+    expect(tabLabels(withToken)).toEqual(['Notebooks', 'Datamesh']);
+    withToken.dispose();
+
+    const signedOut = await mount({
+      token: 'a-datamesh-token',
+      signedIn: false
+    });
+    expect(tabLabels(signedOut)).toEqual(['Notebooks', 'Datamesh']);
+    signedOut.dispose();
+  });
+
+  it('offers the Oceanum AI tab once the host says the user is signed in', async () => {
+    const widget = await mount({ signedIn: true });
+
+    expect(tabLabels(widget)).toEqual(['Notebooks', 'Datamesh', 'Oceanum AI']);
 
     widget.dispose();
   });

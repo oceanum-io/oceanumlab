@@ -30,6 +30,7 @@ import {
   aiBackendUrl,
   aiCredentialSource,
   canSignIn,
+  isSignedIn,
   pastedToken,
   resolveAiCredential,
   signInToken,
@@ -497,6 +498,8 @@ interface IAiAccess {
   pasted: string;
   /** Whether the host can sign the user in to Oceanum.io on this site. */
   canSignIn: boolean;
+  /** Whether the host says the user is signed in to Oceanum.io. */
+  signedIn: boolean;
   /** The backend address: the deployment's Oceanum AI. */
   backend: string;
 }
@@ -510,6 +513,7 @@ function readAiAccess(
     source: aiCredentialSource(datameshToken, commands),
     pasted: pastedToken(datameshToken),
     canSignIn: canSignIn(commands),
+    signedIn: isSignedIn(commands),
     backend: aiBackendUrl(settings.aiBackendUrl())
   };
 }
@@ -1016,7 +1020,10 @@ function PanelTabs({
     },
     { id: 'datamesh', label: 'Datamesh', render: renderDatamesh }
   ];
-  if (access.source) {
+  // Signed in, not merely holding a credential: a Datamesh token pasted into the
+  // settings would reach the backend, but the tab stays out of the way until someone
+  // has signed in to Oceanum.io.
+  if (access.signedIn) {
     tabs.push({
       id: 'ai',
       label: 'Oceanum AI',
