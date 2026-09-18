@@ -20,6 +20,7 @@ import { reporterFor } from './progress';
 import { ConversationPin } from './conversationPin';
 import { deviceAuthPlugin } from './auth/plugin';
 import { IOceanumAuth } from './auth/tokens';
+import { CommandIDs as ShareCommandIDs, sharePlugin } from './share/plugin';
 
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
@@ -149,12 +150,12 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       settingsChanged,
       commands: app.commands,
       getCurrentWidget,
-      auth
-      // No `openStoredNotebook`: nothing can open a spec store record by id yet.
-      // share-oceanum has `oceanum-share:open`, but it takes no arguments — it opens
-      // its own picker — so there is nothing to hand an id to. Opening arrives with
-      // the drive in OCE-182, where the contents API makes it the ordinary path.
-      // Until then the list reads rather than offering a click that does nothing.
+      auth,
+      openStoredNotebook: id => {
+        app.commands.execute(ShareCommandIDs.open, { id }).catch(error => {
+          console.error('Oceanum: could not open the stored notebook.', error);
+        });
+      }
     });
     datameshConnectWidget.id = 'datamesh-connect';
     datameshConnectWidget.title.icon = oceanumIcon;
@@ -399,6 +400,7 @@ export * from './auth/tokens';
 
 export default [
   deviceAuthPlugin,
+  sharePlugin,
   datamesh_connect_extension,
   oceanum_ai_extension
 ];

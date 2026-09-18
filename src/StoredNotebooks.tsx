@@ -1,16 +1,23 @@
 import * as React from 'react';
 
 import { IOceanumAuth } from './auth/tokens';
-import { ISpecSummary, listNotebooks, partitionNotebooks } from './specStore';
+import { SpecStoreClient } from './share/client';
+import { notebooksChanged } from './share/events';
+import { ISpecSummary, partitionSummaries } from './share/notebook';
+import { SPEC_ID_ATTRIBUTE } from './share/plugin';
 
 export interface IStoredNotebooksProps {
   auth: IOceanumAuth;
   /**
-   * Open a stored notebook, when this host can. Undefined where nothing has registered
-   * a way to open one — today that is native JupyterLab, which has no spec store drive
-   * until OCE-182. The list then reads rather than offering an action that does nothing.
+   * Open a stored notebook. Undefined where nothing has registered a way to open one;
+   * the list then reads rather than offering a click that does nothing.
    */
   onOpen?: (item: ISpecSummary) => void;
+  /**
+   * Start signing in the way this host shows it; without it the auth's own `signIn()`
+   * is used, which on a JupyterLab server shows no code dialog.
+   */
+  onSignIn?: () => void;
 }
 
 type Load =
@@ -29,6 +36,12 @@ function Section({
   empty: string;
   onOpen?: (item: ISpecSummary) => void;
 }): React.ReactElement {
+  // Each row carries its record id so the share plugin's context menu (Open, Rename,
+  // Share, Delete) can tell which one was clicked.
+  const rowAttributes = (item: ISpecSummary) => ({
+    [SPEC_ID_ATTRIBUTE]: item.id,
+    title: item.description ?? undefined
+  });
   return (
     <div className="oceanum-notebooks-section">
       <div className="oceanum-notebooks-heading">
@@ -47,7 +60,7 @@ function Section({
                   type="button"
                   className="oceanum-notebooks-item"
                   onClick={() => onOpen(item)}
-                  title={item.description ?? undefined}
+                  {...rowAttributes(item)}
                 >
                   <span className="oceanum-notebooks-name">
                     {item.name || 'Untitled'}
@@ -56,7 +69,7 @@ function Section({
               ) : (
                 <div
                   className="oceanum-notebooks-item oceanum-notebooks-item-static"
-                  title={item.description ?? undefined}
+                  {...rowAttributes(item)}
                 >
                   <span className="oceanum-notebooks-name">
                     {item.name || 'Untitled'}
@@ -76,18 +89,25 @@ function Section({
  */
 export function StoredNotebooks({
   auth,
-  onOpen
+  onOpen,
+  onSignIn
 }: IStoredNotebooksProps): React.ReactElement {
   const [load, setLoad] = React.useState<Load>({ state: 'loading' });
   const [user, setUser] = React.useState(auth.user);
+  // Bumped whenever the store changes, so the list is fetched again.
+  const [version, setVersion] = React.useState(0);
 
   // Reload whenever the signed-in user changes, so signing in or out does not leave a
-  // stale list from the previous session on screen.
+  // stale list from the previous session on screen; and whenever this extension has
+  // created, renamed or deleted a record.
   React.useEffect(() => {
     const onUser = (): void => setUser(auth.user);
+    const onChanged = (): void => setVersion(v => v + 1);
     auth.userChanged.connect(onUser);
+    notebooksChanged.connect(onChanged);
     return () => {
       auth.userChanged.disconnect(onUser);
+      notebooksChanged.disconnect(onChanged);
     };
   }, [auth]);
 
@@ -101,15 +121,11 @@ export function StoredNotebooks({
     setLoad({ state: 'loading' });
     void (async () => {
       try {
-        const token = await auth.getAccessToken();
-        if (cancelled) {
-          return;
-        }
-        if (!token) {
-          setLoad({ state: 'ready', items: [] });
-          return;
-        }
-        const items = await listNotebooks(specs, token);
+        const client = new SpecStoreClient({
+          specsUrl: specs,
+          getAccessToken: () => auth.getAccessToken()
+        });
+        const items = await client.list();
         if (!cancelled) {
           setLoad({ state: 'ready', items });
         }
@@ -128,12 +144,36 @@ export function StoredNotebooks({
     return () => {
       cancelled = true;
     };
-  }, [auth, user]);
+  }, [auth, user, version]);
 
   if (!user) {
+    const signIn = (): void => {
+      if (onSignIn) {
+        onSignIn();
+        return;
+      }
+      auth.signIn().catch(error => {
+        console.warn('Oceanum.io sign-in could not start.', error);
+      });
+    };
     return (
       <div className="oceanum-text-empty">
-        Sign in to Oceanum.io to see your notebooks.
+        {/* A link rather than a button to match the panel's other actions, so it
+            carries the role and the keys a button would have. */}
+        <a
+          role="button"
+          tabIndex={0}
+          onClick={signIn}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              signIn();
+            }
+          }}
+        >
+          Sign in
+        </a>{' '}
+        to Oceanum.io to see your notebooks.
       </div>
     );
   }
@@ -146,7 +186,7 @@ export function StoredNotebooks({
     return <div className="oceanum-text-error">{load.message}</div>;
   }
 
-  const { mine, shared } = partitionNotebooks(load.items, user.email);
+  const { mine, shared } = partitionSummaries(load.items, user.email);
   return (
     <div className="oceanum-notebooks">
       <Section

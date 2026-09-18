@@ -22,6 +22,7 @@ import { marked } from 'marked';
 
 import { DatasourceItem } from './DatasourceItem';
 import { IOceanumAuth } from './auth/tokens';
+import { startSignIn } from './auth/startSignIn';
 import { StoredNotebooks } from './StoredNotebooks';
 import { ITab, Tabs } from './Tabs';
 import {
@@ -977,6 +978,7 @@ function PanelTabs({
   commands,
   settings,
   renderDatamesh,
+  openStoredNotebook,
   selected,
   onSelect
 }: {
@@ -984,6 +986,7 @@ function PanelTabs({
   commands: CommandRegistry;
   settings: IAiSettings;
   renderDatamesh: () => React.ReactElement;
+  openStoredNotebook?: (id: string) => void;
   selected: string;
   onSelect: (id: string) => void;
 }): React.ReactElement {
@@ -996,7 +999,15 @@ function PanelTabs({
         // An auth with no environment is a provider that has nothing to sign in to (the
         // server has sign-in turned off). Asking the user to sign in would be a dead end.
         auth?.environment ? (
-          <StoredNotebooks auth={auth} />
+          <StoredNotebooks
+            auth={auth}
+            onOpen={openStoredNotebook && (item => openStoredNotebook(item.id))}
+            onSignIn={() => {
+              startSignIn(commands, auth).catch(error => {
+                console.warn('Oceanum.io sign-in could not start.', error);
+              });
+            }}
+          />
         ) : (
           <div className="oceanum-text-empty">
             Oceanum.io sign-in is not configured for this host.
@@ -1128,6 +1139,7 @@ export class DatameshConnectWidget extends ReactWidget {
               commands={this.props.commands}
               settings={this.props}
               renderDatamesh={() => this.renderDatamesh()}
+              openStoredNotebook={this.props.openStoredNotebook}
               selected={this.selectedTab}
               onSelect={id => this.selectTab(id)}
             />

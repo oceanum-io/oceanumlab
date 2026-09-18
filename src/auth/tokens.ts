@@ -25,6 +25,13 @@ export interface IOceanumEnvironment {
    * the site origin is an allowed callback URL.
    */
   readonly signInRedirect: boolean;
+  /**
+   * Whether Oceanum.io is the only file management this host shows, as on
+   * notebook.oceanum.io: the file browser and the File menu's local-file entries go,
+   * and every local save is pushed to the spec store. `'local'` (the default when
+   * absent) keeps JupyterLab's file management alongside the Oceanum commands.
+   */
+  readonly fileManagement?: 'local' | 'oceanum';
 }
 
 /** Service base URLs for an environment, without trailing slashes. */

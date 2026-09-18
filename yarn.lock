@@ -2637,6 +2637,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/mainmenu@npm:^4.6.3":
+  version: 4.6.3
+  resolution: "@jupyterlab/mainmenu@npm:4.6.3"
+  dependencies:
+    "@jupyterlab/apputils": ^4.7.3
+    "@jupyterlab/translation": ^4.6.3
+    "@jupyterlab/ui-components": ^4.6.3
+    "@lumino/algorithm": ^2.0.4
+    "@lumino/commands": ^2.3.3
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/widgets": ^2.8.0
+  checksum: a9de4b5ca79308a568a222173e606aecb91d0fc45f480c8c1f5954d399478f777ce67eb21bf59f14a2beb73efca64c40d16f471e4d15e7658857b0c2b65f3514
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/markedparser-extension@npm:^4.6.3":
   version: 4.6.3
   resolution: "@jupyterlab/markedparser-extension@npm:4.6.3"
@@ -3213,7 +3228,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/messaging@npm:^2.0.4, @lumino/messaging@npm:^2.0.5":
+"@lumino/messaging@npm:^2.0.3, @lumino/messaging@npm:^2.0.4, @lumino/messaging@npm:^2.0.5":
   version: 2.0.5
   resolution: "@lumino/messaging@npm:2.0.5"
   dependencies:
@@ -3469,6 +3484,9 @@ __metadata:
     "@jupyterlab/cells": ^4.6.3
     "@jupyterlab/console": ^4.6.3
     "@jupyterlab/coreutils": ^6.6.3
+    "@jupyterlab/docmanager": ^4.6.3
+    "@jupyterlab/mainmenu": ^4.6.3
+    "@jupyterlab/nbformat": ^4.6.3
     "@jupyterlab/notebook": ^4.6.3
     "@jupyterlab/services": ^7.6.3
     "@jupyterlab/settingregistry": ^4.6.3
@@ -3476,6 +3494,7 @@ __metadata:
     "@lumino/commands": ^2.3.3
     "@lumino/coreutils": ^2.2.2
     "@lumino/disposable": ^2.1.5
+    "@lumino/messaging": ^2.0.3
     "@lumino/signaling": ^2.1.5
     "@lumino/widgets": ^2.8.0
     "@phosphor-icons/react": ^2.1.10

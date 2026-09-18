@@ -43,17 +43,26 @@
   color: var(--jp-ui-font-color1);
 }
 
+/* Headers within the panel's tabs (Datamesh Workspace and the workspace name, Oceanum
+ * AI, My notebooks / Shared with me) share one text style: bold, standard case. */
+.datamesh-workspace-header,
+.datamesh-workspace-name,
+.oceanum-ai-chat-header,
+.oceanum-notebooks-heading {
+  font-weight: 600;
+  font-size: var(--jp-ui-font-size1);
+  color: var(--jp-ui-font-color1);
+  letter-spacing: 0.5px;
+  text-transform: none;
+}
+
 /* Datamesh Workspace section header */
 .datamesh-workspace-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  font-weight: 600;
-  font-size: var(--jp-ui-font-size0);
-  color: var(--jp-ui-font-color2);
   background: var(--jp-layout-color1);
-  letter-spacing: 0.5px;
 }
 
 .add-connection {
@@ -78,13 +87,9 @@
 
 .datamesh-workspace-name {
   flex: 0 0 auto;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
   padding: 8px 8px 8px 12px;
   margin: 0;
   margin-bottom: 10px;
-  font-size: var(--jp-ui-font-size1);
 }
 
 .datasource-item-expand,
@@ -224,12 +229,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: bold;
-  font-size: var(--jp-ui-font-size1);
   padding: 6px 10px;
-  color: var(--jp-ui-font-color1);
   background: var(--jp-layout-color2);
-  letter-spacing: 0.5px;
 }
 
 .oceanum-ai-chat-title {
@@ -586,9 +587,6 @@
   display: flex;
   justify-content: space-between;
   padding: 6px 8px 2px;
-  color: var(--jp-ui-font-color2);
-  font-size: var(--jp-ui-font-size0);
-  text-transform: uppercase;
 }
 
 .oceanum-notebooks-list {
@@ -632,4 +630,96 @@
   padding: 8px;
   color: var(--jp-error-color1);
   font-size: var(--jp-ui-font-size1);
+}
+
+/* Open from Oceanum and Share on Oceanum dialogs (src/share/widgets.ts). */
+.jp-OceanumShare-body {
+  min-width: 320px;
+  max-width: 560px;
+}
+
+.jp-OceanumShare-heading {
+  margin: 12px 0 6px;
+  font-size: var(--jp-ui-font-size1);
+  font-weight: 600;
+}
+
+.jp-OceanumShare-heading:first-child {
+  margin-top: 0;
+}
+
+.jp-OceanumShare-empty,
+.jp-OceanumShare-hint {
+  margin: 0 0 6px;
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-OceanumShare-list {
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: var(--jp-border-width) solid var(--jp-border-color1);
+}
+
+.jp-OceanumShare-item {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.jp-OceanumShare-item:hover {
+  background: var(--jp-layout-color2);
+}
+
+.jp-OceanumShare-item.jp-mod-selected {
+  background: var(--jp-brand-color3);
+}
+
+.jp-OceanumShare-meta {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
+}
+
+.jp-OceanumShare-linkRow,
+.jp-OceanumShare-personRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.jp-OceanumShare-linkRow > :first-child,
+.jp-OceanumShare-personRow > :first-child {
+  flex: 1;
+}
+
+/* A textarea so several addresses fit; without this it would default to monospace. */
+.jp-OceanumShare-email {
+  font: inherit;
+  resize: vertical;
+}
+
+/* Keep the access select beside the first line of addresses, not centred against them. */
+.jp-OceanumShare-personRow {
+  align-items: flex-start;
+}
+
+.jp-OceanumShare-choice {
+  display: block;
+  margin: 6px 0;
+}
+
+.jp-OceanumShare-choice input[type='radio'] {
+  width: auto;
+  height: auto;
+  margin: 0 4px 0 0;
+  appearance: auto;
+}
+
+.jp-OceanumShare-warning {
+  margin: 0 0 0 20px;
+  color: var(--jp-warn-color0);
 }
