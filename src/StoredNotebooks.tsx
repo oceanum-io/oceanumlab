@@ -126,7 +126,7 @@ function ExampleSections({
             role="switch"
             aria-checked={show}
             aria-label="Show examples"
-            title={show ? 'Hide the examples' : 'Show the examples'}
+            title="Show examples"
             className="oceanum-notebooks-switch"
             onClick={() => onShowChange(!show)}
           >

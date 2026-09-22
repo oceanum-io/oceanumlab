@@ -671,6 +671,33 @@
   left: 12px;
 }
 
+/* Forced colours replace backgrounds, which would leave a switch drawn only with them
+   invisible: draw it with system colours instead. */
+@media (forced-colors: active) {
+  .oceanum-notebooks-switch {
+    forced-color-adjust: none;
+    box-sizing: border-box;
+    border: 1px solid ButtonText;
+    background: Canvas;
+  }
+
+  .oceanum-notebooks-switch[aria-checked='true'] {
+    background: Highlight;
+  }
+
+  .oceanum-notebooks-switch-thumb {
+    top: 1px;
+    left: 1px;
+    background: ButtonText;
+  }
+
+  .oceanum-notebooks-switch[aria-checked='true']
+    .oceanum-notebooks-switch-thumb {
+    left: 11px;
+    background: HighlightText;
+  }
+}
+
 /* A group within Examples: quieter than the tab's section headings. */
 .oceanum-notebooks-subheading {
   padding: 4px 8px 0;

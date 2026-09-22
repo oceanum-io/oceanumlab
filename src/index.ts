@@ -177,7 +177,11 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       // for the plugin's settings to load, so a click before then is not lost.
       setShowExamples: show => {
         settingRegistry.set(PLUGIN_ID, 'showExamples', show).catch(error => {
+          // The switch moves only once the setting is saved, so say why it did not.
           console.error('Oceanum: could not save the Examples setting.', error);
+          Notification.error('Could not save whether to show the examples.', {
+            autoClose: 5000
+          });
         });
       }
     });
