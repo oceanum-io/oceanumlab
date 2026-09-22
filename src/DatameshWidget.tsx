@@ -966,6 +966,8 @@ export interface IDatameshWidgetProps {
   auth?: IOceanumAuth | null;
   /** Open a stored notebook by spec store id. */
   openStoredNotebook?: (id: string) => void;
+  /** Open a copy of an example by spec store id, named from its title. */
+  openExample?: (id: string, title: string) => void;
 }
 
 /**
@@ -983,6 +985,7 @@ function PanelTabs({
   settings,
   renderDatamesh,
   openStoredNotebook,
+  openExample,
   selected,
   onSelect
 }: {
@@ -991,6 +994,7 @@ function PanelTabs({
   settings: IAiSettings;
   renderDatamesh: () => React.ReactElement;
   openStoredNotebook?: (id: string) => void;
+  openExample?: (id: string, title: string) => void;
   selected: string;
   onSelect: (id: string) => void;
 }): React.ReactElement {
@@ -1006,6 +1010,9 @@ function PanelTabs({
           <StoredNotebooks
             auth={auth}
             onOpen={openStoredNotebook && (item => openStoredNotebook(item.id))}
+            onOpenExample={
+              openExample && (item => openExample(item.id, item.title))
+            }
             onSignIn={() => {
               startSignIn(commands, auth).catch(error => {
                 console.warn('Oceanum.io sign-in could not start.', error);
@@ -1147,6 +1154,7 @@ export class DatameshConnectWidget extends ReactWidget {
               settings={this.props}
               renderDatamesh={() => this.renderDatamesh()}
               openStoredNotebook={this.props.openStoredNotebook}
+              openExample={this.props.openExample}
               selected={this.selectedTab}
               onSelect={id => this.selectTab(id)}
             />

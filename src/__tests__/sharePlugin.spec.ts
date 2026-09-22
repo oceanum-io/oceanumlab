@@ -78,8 +78,11 @@ const record = (id: string, name: string): ISpecRecord => ({
   spec: notebook()
 });
 
-/** Records the spec store calls a command makes, and answers them. */
-function store() {
+/**
+ * Records the spec store calls a command makes, and answers them. A record holds
+ * `stored[id]` when given, else an empty notebook.
+ */
+function store(stored: Record<string, INotebookContent> = {}) {
   const calls: string[] = [];
   const bodies: Record<string, unknown>[] = [];
   const names: Record<string, string> = { [ID_A]: 'Alpha', [ID_B]: 'Beta' };
@@ -100,7 +103,10 @@ function store() {
       json: async () =>
         method === 'GET' && id === 'notebook'
           ? [record(ID_A, 'Alpha'), record(ID_B, 'Beta')]
-          : record(id, names[id] ?? 'Alpha')
+          : {
+              ...record(id, names[id] ?? 'Alpha'),
+              spec: stored[id] ?? notebook()
+            }
     } as unknown as Response;
   };
   return { calls, bodies, fetcher };
@@ -139,7 +145,12 @@ interface IHarness {
   calls: string[];
   bodies: Record<string, unknown>[];
   saved: string[];
+  /** What each save wrote, by path. */
+  written: Record<string, unknown>;
   opened: string[];
+  /** The widgets `openOrReveal` returned, in order; set `isDisposed` to close one. */
+  widgets: { id: string; isDisposed: boolean }[];
+  activated: string[];
   renamed: [string, string][];
   /** What a right-click last landed on; never cleared, as JupyterLab does not. */
   setHit: (node: HTMLElement | null) => void;
@@ -152,12 +163,16 @@ function activate(
     panels?: NotebookPanel[];
     current?: NotebookPanel | null;
     folder?: Record<string, unknown>;
+    stored?: Record<string, INotebookContent>;
   } = {}
 ): IHarness {
   const commands = new CommandRegistry();
-  const { calls, bodies, fetcher } = store();
+  const { calls, bodies, fetcher } = store(options.stored);
   const saved: string[] = [];
+  const written: Record<string, unknown> = {};
   const opened: string[] = [];
+  const widgets: { id: string; isDisposed: boolean }[] = [];
+  const activated: string[] = [];
   const renamed: [string, string][] = [];
   const panels = options.panels ?? [];
   let current = options.current ?? null;
@@ -185,7 +200,9 @@ function activate(
       get currentWidget() {
         return current;
       },
-      activateById: (): void => undefined,
+      activateById: (id: string): void => {
+        activated.push(id);
+      },
       widgets: (): Widget[] => []
     },
     contextMenu: { addItem: (): void => undefined },
@@ -213,8 +230,13 @@ function activate(
       }
       return { type: 'notebook', content: folder[name] };
     },
-    save: async (path: string) => {
+    save: async (path: string, model?: { content?: unknown }) => {
       saved.push(path);
+      written[path] = model?.content;
+      // Like the real drive, the folder lists the file from now on.
+      if (path.startsWith('Oceanum/')) {
+        folder[path.replace('Oceanum/', '')] = model?.content;
+      }
       return { path };
     },
     newUntitled: async () => ({ path: 'Untitled Folder' }),
@@ -224,7 +246,9 @@ function activate(
     services: { contents },
     openOrReveal: (path: string) => {
       opened.push(path);
-      return {};
+      const widget = { id: `widget-${widgets.length}`, isDisposed: false };
+      widgets.push(widget);
+      return widget;
     },
     rename: async (from: string, to: string): Promise<void> => {
       renamed.push([from, to]);
@@ -265,7 +289,10 @@ function activate(
     calls,
     bodies,
     saved,
+    written,
     opened,
+    widgets,
+    activated,
     renamed,
     setHit: node => {
       hit = node;
@@ -422,5 +449,105 @@ describe('opening a record whose local copy already exists', () => {
     await harness.commands.execute(CommandIDs.open, { id: ID_A });
 
     expect(harness.saved).toEqual(['Oceanum/Alpha (1).ipynb']);
+  });
+});
+
+describe('opening an example', () => {
+  // As stored on Oceanum: linked to its own record, with a trusted cell.
+  const example: INotebookContent = {
+    ...notebook(ID_A),
+    cells: [
+      {
+        cell_type: 'code',
+        source: 'print(1)',
+        metadata: { trusted: true },
+        outputs: [],
+        execution_count: null
+      }
+    ]
+  };
+
+  it('writes an untrusted copy linked to nothing, named from its title', async () => {
+    const harness = activate({ stored: { [ID_A]: example } });
+
+    await harness.commands.execute(CommandIDs.openExample, {
+      id: ID_A,
+      title: 'Query a datasource'
+    });
+
+    // Read, never written back: the example's record is Oceanum's.
+    expect(harness.calls).toEqual([`GET ${ID_A}`]);
+    const path = 'Oceanum/Query a datasource.ipynb';
+    expect(harness.saved).toEqual([path]);
+    expect(harness.opened).toEqual([path]);
+    const content = harness.written[path] as INotebookContent;
+    // A linked copy's first save would PUT to the example's record and be refused.
+    expect(content.metadata).not.toHaveProperty('oceanum');
+    expect(content.cells[0].metadata).toEqual({});
+  });
+
+  it('never overwrites a file already there', async () => {
+    const harness = activate({
+      folder: { 'Query a datasource.ipynb': notebook() }
+    });
+
+    await harness.commands.execute(CommandIDs.openExample, {
+      id: ID_A,
+      title: 'Query a datasource'
+    });
+
+    expect(harness.saved).toEqual(['Oceanum/Query a datasource (1).ipynb']);
+  });
+
+  it('brings its open copy forward instead of writing another', async () => {
+    const harness = activate();
+    const args = { id: ID_A, title: 'Example' };
+
+    await harness.commands.execute(CommandIDs.openExample, args);
+    await harness.commands.execute(CommandIDs.openExample, args);
+
+    expect(harness.saved).toEqual(['Oceanum/Example.ipynb']);
+    expect(harness.activated).toEqual([harness.widgets[0].id]);
+  });
+
+  it('writes a fresh copy once the last one was closed', async () => {
+    const harness = activate();
+    const args = { id: ID_A, title: 'Example' };
+
+    await harness.commands.execute(CommandIDs.openExample, args);
+    harness.widgets[0].isDisposed = true;
+    await harness.commands.execute(CommandIDs.openExample, args);
+
+    expect(harness.saved).toEqual([
+      'Oceanum/Example.ipynb',
+      'Oceanum/Example (1).ipynb'
+    ]);
+    expect(harness.activated).toEqual([]);
+  });
+
+  it('falls back to the record name when given no title', async () => {
+    const harness = activate();
+
+    await harness.commands.execute(CommandIDs.openExample, { id: ID_A });
+
+    expect(harness.saved).toEqual(['Oceanum/Alpha.ipynb']);
+  });
+
+  it('ignores an id that is not a record id', async () => {
+    const harness = activate();
+
+    await harness.commands.execute(CommandIDs.openExample, {
+      id: '../eidos',
+      title: 'Nope'
+    });
+
+    expect(harness.calls).toEqual([]);
+    expect(harness.saved).toEqual([]);
+  });
+
+  it('is disabled while signed out', () => {
+    const harness = activate({ user: null });
+
+    expect(harness.commands.isEnabled(CommandIDs.openExample)).toBe(false);
   });
 });

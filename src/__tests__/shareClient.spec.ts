@@ -95,6 +95,20 @@ describe('SpecStoreClient', () => {
     expect(call().headers).toEqual({});
   });
 
+  it('reads another spec type when given one', async () => {
+    const fetch = jest.fn(async () => json(record()));
+    const client = new SpecStoreClient({
+      specsUrl: 'https://specs.example.com/',
+      getAccessToken: async () => 'tok',
+      specType: 'notebook-demo',
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+    await client.get(ID);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe(
+      `https://specs.example.com/specs/notebook-demo/${ID}`
+    );
+  });
+
   it('refuses ids that are not UUIDs before building a URL', async () => {
     const { client, fetch } = setup(() => json(record()));
     await expect(client.get('../eidos')).rejects.toMatchObject({

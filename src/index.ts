@@ -155,6 +155,13 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         app.commands.execute(ShareCommandIDs.open, { id }).catch(error => {
           console.error('Oceanum: could not open the stored notebook.', error);
         });
+      },
+      openExample: (id, title) => {
+        app.commands
+          .execute(ShareCommandIDs.openExample, { id, title })
+          .catch(error => {
+            console.error('Oceanum: could not open the example.', error);
+          });
       }
     });
     datameshConnectWidget.id = 'datamesh-connect';

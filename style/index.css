@@ -600,7 +600,8 @@
   list-style: none;
 }
 
-.oceanum-notebooks-item {
+.oceanum-notebooks-item,
+.oceanum-notebooks-example {
   display: block;
   width: 100%;
   padding: 4px 8px;
@@ -613,7 +614,8 @@
   cursor: pointer;
 }
 
-.oceanum-notebooks-item:hover {
+.oceanum-notebooks-item:hover,
+.oceanum-notebooks-example:hover {
   background: var(--jp-layout-color2);
 }
 
@@ -623,6 +625,13 @@
 
 .oceanum-notebooks-item-static:hover {
   background: transparent;
+}
+
+/* A group within Examples: quieter than the tab's section headings. */
+.oceanum-notebooks-subheading {
+  padding: 4px 8px 0;
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size0);
 }
 
 .oceanum-notebooks-name {

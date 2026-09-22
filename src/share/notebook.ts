@@ -190,13 +190,10 @@ export function buildSpecBody(
 }
 
 /**
- * The notebook stored in a record, with its `oceanum` link set. Throws if the record
- * does not hold an nbformat 4 notebook.
+ * The notebook stored in a record, untrusted. Throws if the record does not hold an
+ * nbformat 4 notebook.
  */
-export function notebookFromRecord(
-  record: ISpecRecord,
-  specsUrl: string
-): INotebookContent {
+function recordNotebook(record: ISpecRecord): INotebookContent {
   const spec = record.spec;
   if (
     !isObject(spec) ||
@@ -206,15 +203,37 @@ export function notebookFromRecord(
   ) {
     throw new Error('This Oceanum.io record is not a valid notebook.');
   }
+  return withoutTrust(spec as unknown as INotebookContent);
+}
+
+/**
+ * The notebook stored in a record, with its `oceanum` link set. Throws if the record
+ * does not hold an nbformat 4 notebook.
+ */
+export function notebookFromRecord(
+  record: ISpecRecord,
+  specsUrl: string
+): INotebookContent {
   const link: IOceanumLink = { spec_id: record.id, specs_url: specsUrl };
   if (record.description) {
     link.description = record.description;
   }
-  const content = withoutTrust(spec as unknown as INotebookContent);
+  const content = recordNotebook(record);
   return {
     ...content,
     metadata: { ...content.metadata, [METADATA_KEY]: { ...link } }
   };
+}
+
+/**
+ * A copy of the notebook stored in a record, linked to nothing: untrusted, and without
+ * any `oceanum` link, so saving it creates a record of the user's own instead of
+ * writing to this one. Throws if the record does not hold an nbformat 4 notebook.
+ */
+export function unlinkedNotebookFromRecord(
+  record: ISpecRecord
+): INotebookContent {
+  return withoutLink(recordNotebook(record));
 }
 
 /** Make a record name safe to use as a single path segment. */
@@ -305,6 +324,70 @@ export function partitionSummaries(
     mine: sorted.filter(isMine),
     shared: sorted.filter(item => !isMine(item))
   };
+}
+
+/** The `kind` of a Notebook Demo record's spec. */
+export const NOTEBOOK_DEMO_KIND = 'notebook-demo';
+
+/** One example in a Notebook Demo record: a notebook record and how to list it. */
+export interface INotebookDemoItem {
+  id: string;
+  title: string;
+  summary?: string;
+}
+
+/** A titled group of examples. */
+export interface INotebookDemoSection {
+  title: string;
+  items: INotebookDemoItem[];
+}
+
+function nonBlank(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * The sections of a Notebook Demo record's spec, keeping only what can be listed: items
+ * with a record id and a title, in sections with a title and at least one such item.
+ * A spec of another kind or version gives no sections, with a warning.
+ */
+export function parseNotebookDemo(spec: unknown): INotebookDemoSection[] {
+  if (
+    !isObject(spec) ||
+    spec.kind !== NOTEBOOK_DEMO_KIND ||
+    spec.version !== 1 ||
+    !Array.isArray(spec.sections)
+  ) {
+    console.warn(
+      'Oceanum: ignoring a Notebook Demo record this version cannot read.'
+    );
+    return [];
+  }
+  const sections: INotebookDemoSection[] = [];
+  for (const section of spec.sections) {
+    if (
+      !isObject(section) ||
+      !nonBlank(section.title) ||
+      !Array.isArray(section.items)
+    ) {
+      continue;
+    }
+    const items: INotebookDemoItem[] = [];
+    for (const item of section.items) {
+      if (!isObject(item) || !isSpecId(item.id) || !nonBlank(item.title)) {
+        continue;
+      }
+      items.push(
+        typeof item.summary === 'string'
+          ? { id: item.id, title: item.title, summary: item.summary }
+          : { id: item.id, title: item.title }
+      );
+    }
+    if (items.length > 0) {
+      sections.push({ title: section.title, items });
+    }
+  }
+  return sections;
 }
 
 /** Parse a spec store timestamp, which is UTC but usually has no zone designator. */

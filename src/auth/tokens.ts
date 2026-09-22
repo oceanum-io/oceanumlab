@@ -32,6 +32,12 @@ export interface IOceanumEnvironment {
    * absent) keeps JupyterLab's file management alongside the Oceanum commands.
    */
   readonly fileManagement?: 'local' | 'oceanum';
+  /**
+   * The spec store id of this deployment's Notebook Demo record, the curated list the
+   * Notebooks tab shows as Examples. Absent where a deployment has none, and never set
+   * by a JupyterLab server's sign-in.
+   */
+  readonly notebookDemo?: string;
 }
 
 /** Service base URLs for an environment, without trailing slashes. */
