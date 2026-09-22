@@ -25,6 +25,10 @@ const baseConfig = jestJupyterLab(__dirname);
 module.exports = {
   ...baseConfig,
   automock: false,
+  // Jest defaults to one worker per core minus one; on a 32-thread machine
+  // that is ~31 ts-jest workers with coverage, enough to exhaust RAM when run
+  // alongside tsc/eslint. 23 spec files don't need more than 4.
+  maxWorkers: 4,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
