@@ -434,6 +434,32 @@ describe('the Examples in the Notebooks tab', () => {
     ).toHaveLength(3);
     widget.dispose();
   });
+
+  it('shows no examples while the setting is still loading', async () => {
+    // Otherwise examples a user has hidden would show for a moment on every reload.
+    stubFetch();
+    const widget = await render(signedIn(DEMO_ID), undefined, {
+      showExamples: null,
+      onShowExamplesChange: () => undefined
+    });
+
+    expect(section(widget, 'Examples')).toBeNull();
+    // They are still kept out of Shared with me in the meantime.
+    expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
+      SHARED
+    ]);
+    widget.dispose();
+  });
+
+  it('shows nothing for hidden examples that no switch could bring back', async () => {
+    stubFetch();
+    const widget = await render(signedIn(DEMO_ID), undefined, {
+      showExamples: false
+    });
+
+    expect(section(widget, 'Examples')).toBeNull();
+    widget.dispose();
+  });
 });
 
 describe('the Notebooks tab while signed out', () => {

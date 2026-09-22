@@ -216,7 +216,8 @@ describe('the Examples switch in the Oceanum panel', () => {
       getAccessToken: async (): Promise<string> => 'tok'
     };
     // What the host keeps: the setting, and the signal it emits when it changes.
-    let shown = true;
+    // Null until the host's settings load.
+    let shown: boolean | null = null;
     const saved: boolean[] = [];
     const settingsChanged = new Signal<unknown, void>({});
     const widget = await mount({
@@ -229,6 +230,13 @@ describe('the Examples switch in the Oceanum panel', () => {
     });
     const toggle = (): HTMLButtonElement | null =>
       widget.node.querySelector<HTMLButtonElement>('[role="switch"]');
+    // The tab has loaded, but the examples wait for the setting.
+    await until(() => widget.node.querySelector('.oceanum-notebooks') !== null);
+    expect(toggle()).toBeNull();
+    expect(widget.node.querySelector('[data-example-id]')).toBeNull();
+
+    shown = true;
+    settingsChanged.emit();
     await until(() => toggle() !== null);
     expect(toggle()!.getAttribute('aria-checked')).toBe('true');
     expect(widget.node.querySelector('[data-example-id]')).not.toBeNull();

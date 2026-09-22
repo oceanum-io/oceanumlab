@@ -557,13 +557,15 @@ function useAiAccess(
 
 /**
  * The `showExamples` setting, read again whenever the settings change. True where the
- * host passes no such setting.
+ * host passes no such setting; null while the host's setting has not loaded.
  */
 function useShowExamples(
-  settings: IAiSettings,
-  read: (() => boolean) | undefined
-): boolean {
-  const [show, setShow] = React.useState(() => read?.() ?? true);
+  settingsChanged: ISignal<unknown, void>,
+  read: (() => boolean | null) | undefined
+): boolean | null {
+  const [show, setShow] = React.useState<boolean | null>(() =>
+    read ? read() : true
+  );
 
   React.useEffect(() => {
     if (!read) {
@@ -572,11 +574,11 @@ function useShowExamples(
     const update = () => setShow(read());
     // Anything that changed between the first render and now.
     update();
-    settings.settingsChanged.connect(update);
+    settingsChanged.connect(update);
     return () => {
-      settings.settingsChanged.disconnect(update);
+      settingsChanged.disconnect(update);
     };
-  }, [settings, read]);
+  }, [settingsChanged, read]);
 
   return show;
 }
@@ -994,8 +996,11 @@ export interface IDatameshWidgetProps {
   openStoredNotebook?: (id: string) => void;
   /** Open a copy of an example by spec store id, named from its title. */
   openExample?: (id: string, title: string) => void;
-  /** The `showExamples` setting: whether the Notebooks tab lists the examples. */
-  showExamples?: () => boolean;
+  /**
+   * The `showExamples` setting: whether the Notebooks tab lists the examples; null
+   * until the settings have loaded.
+   */
+  showExamples?: () => boolean | null;
   /** Save the `showExamples` setting, from the switch on the Examples heading. */
   setShowExamples?: (show: boolean) => void;
 }
@@ -1027,13 +1032,13 @@ function PanelTabs({
   renderDatamesh: () => React.ReactElement;
   openStoredNotebook?: (id: string) => void;
   openExample?: (id: string, title: string) => void;
-  showExamples?: () => boolean;
+  showExamples?: () => boolean | null;
   setShowExamples?: (show: boolean) => void;
   selected: string;
   onSelect: (id: string) => void;
 }): React.ReactElement {
   const access = useAiAccess(commands, settings);
-  const examplesShown = useShowExamples(settings, showExamples);
+  const examplesShown = useShowExamples(settings.settingsChanged, showExamples);
   const tabs: ITab[] = [
     {
       id: 'notebooks',

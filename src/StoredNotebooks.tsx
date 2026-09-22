@@ -24,8 +24,12 @@ export interface IStoredNotebooksProps {
   onOpen?: (item: ISpecSummary) => void;
   /** Open a copy of an example, as `onOpen` does for a stored notebook. */
   onOpenExample?: (item: INotebookDemoItem) => void;
-  /** Whether the examples are listed, or folded under their heading. Default true. */
-  showExamples?: boolean;
+  /**
+   * Whether the examples are listed, or folded under their heading. Default true. Null
+   * while the setting is still loading: the Examples wait for it, so examples a user
+   * has hidden never show for a moment first.
+   */
+  showExamples?: boolean | null;
   /**
    * Record the user's choice to show or hide the examples. The Examples heading offers
    * its switch only where this is given: a switch that could not keep its setting
@@ -92,10 +96,11 @@ function ExampleSections({
 }: {
   examples: Examples;
   onOpen?: (item: INotebookDemoItem) => void;
-  show: boolean;
+  show: boolean | null;
   onShowChange?: (show: boolean) => void;
 }): React.ReactElement | null {
-  if (examples.state === 'none') {
+  // Not yet known, or hidden with no switch to bring them back: nothing to show.
+  if (examples.state === 'none' || show === null || (!show && !onShowChange)) {
     return null;
   }
   const count =

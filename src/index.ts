@@ -79,10 +79,9 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     const aiBackendUrl = auth?.urls?.ai ?? OCEANUM_AI_BACKEND_URL;
     // The `datameshToken` setting for the AI chat; empty until the settings load.
     let datameshTokenSetting = '';
-    // The `showExamples` setting for the Notebooks tab, and the loaded settings that the
-    // Examples heading's switch writes it back to.
-    let showExamplesSetting = true;
-    let loadedSettings: ISettingRegistry.ISettings | null = null;
+    // The `showExamples` setting for the Notebooks tab; null until the settings load, so
+    // examples a user has hidden do not show for a moment on every reload.
+    let showExamplesSetting: boolean | null = null;
     // Tells the sidebar the settings above have changed.
     const settingsChanged = new Signal<JupyterFrontEnd, void>(app);
 
@@ -111,7 +110,6 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
 
     Promise.all([app.restored, settingRegistry.load(PLUGIN_ID)])
       .then(([, setting]) => {
-        loadedSettings = setting;
         // Read the settings
         updateSettings(setting);
 
@@ -122,6 +120,10 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         console.error(
           `Something went wrong when reading the Oceanumlab settings.\n${reason}`
         );
+        // Unreadable settings fall back to the default rather than leaving the examples
+        // waiting for a value that will never come.
+        showExamplesSetting = true;
+        settingsChanged.emit();
       });
 
     const getCurrentWidget = (): Widget => {
@@ -171,15 +173,10 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       },
       showExamples: () => showExamplesSetting,
       // Saved as a user setting, so the choice outlasts the page; the settings'
-      // `changed` signal brings the new value back to the panel.
+      // `changed` signal brings the new value back to the panel. The registry waits
+      // for the plugin's settings to load, so a click before then is not lost.
       setShowExamples: show => {
-        if (!loadedSettings) {
-          console.warn(
-            'Oceanum: the settings have not loaded, so cannot save.'
-          );
-          return;
-        }
-        loadedSettings.set('showExamples', show).catch(error => {
+        settingRegistry.set(PLUGIN_ID, 'showExamples', show).catch(error => {
           console.error('Oceanum: could not save the Examples setting.', error);
         });
       }
