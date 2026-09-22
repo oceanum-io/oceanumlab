@@ -556,6 +556,34 @@ function useAiAccess(
 }
 
 /**
+ * The `showExamples` setting, read again whenever the settings change. True where the
+ * host passes no such setting; null while the host's setting has not loaded.
+ */
+function useShowExamples(
+  settingsChanged: ISignal<unknown, void>,
+  read: (() => boolean | null) | undefined
+): boolean | null {
+  const [show, setShow] = React.useState<boolean | null>(() =>
+    read ? read() : true
+  );
+
+  React.useEffect(() => {
+    if (!read) {
+      return;
+    }
+    const update = () => setShow(read());
+    // Anything that changed between the first render and now.
+    update();
+    settingsChanged.connect(update);
+    return () => {
+      settingsChanged.disconnect(update);
+    };
+  }, [settingsChanged, read]);
+
+  return show;
+}
+
+/**
  * Shows a message prompting the user to sign in to Oceanum.io, or to configure
  * their Datamesh token where the site has no sign-in. Only renders when there
  * is no credential.
@@ -968,6 +996,13 @@ export interface IDatameshWidgetProps {
   openStoredNotebook?: (id: string) => void;
   /** Open a copy of an example by spec store id, named from its title. */
   openExample?: (id: string, title: string) => void;
+  /**
+   * The `showExamples` setting: whether the Notebooks tab lists the examples; null
+   * until the settings have loaded.
+   */
+  showExamples?: () => boolean | null;
+  /** Save the `showExamples` setting, from the switch on the Examples heading. */
+  setShowExamples?: (show: boolean) => void;
 }
 
 /**
@@ -986,6 +1021,8 @@ function PanelTabs({
   renderDatamesh,
   openStoredNotebook,
   openExample,
+  showExamples,
+  setShowExamples,
   selected,
   onSelect
 }: {
@@ -995,10 +1032,13 @@ function PanelTabs({
   renderDatamesh: () => React.ReactElement;
   openStoredNotebook?: (id: string) => void;
   openExample?: (id: string, title: string) => void;
+  showExamples?: () => boolean | null;
+  setShowExamples?: (show: boolean) => void;
   selected: string;
   onSelect: (id: string) => void;
 }): React.ReactElement {
   const access = useAiAccess(commands, settings);
+  const examplesShown = useShowExamples(settings.settingsChanged, showExamples);
   const tabs: ITab[] = [
     {
       id: 'notebooks',
@@ -1013,6 +1053,8 @@ function PanelTabs({
             onOpenExample={
               openExample && (item => openExample(item.id, item.title))
             }
+            showExamples={examplesShown}
+            onShowExamplesChange={setShowExamples}
             onSignIn={() => {
               startSignIn(commands, auth).catch(error => {
                 console.warn('Oceanum.io sign-in could not start.', error);
@@ -1155,6 +1197,8 @@ export class DatameshConnectWidget extends ReactWidget {
               renderDatamesh={() => this.renderDatamesh()}
               openStoredNotebook={this.props.openStoredNotebook}
               openExample={this.props.openExample}
+              showExamples={this.props.showExamples}
+              setShowExamples={this.props.setShowExamples}
               selected={this.selectedTab}
               onSelect={id => this.selectTab(id)}
             />

@@ -44,8 +44,18 @@ describe('the datamesh-connect settings schema', () => {
       'datameshToken',
       'injectToken',
       'autoRunCode',
-      'iterate'
+      'iterate',
+      'showExamples'
     ]);
+  });
+
+  it('shows the examples unless the user has hidden them', async () => {
+    // Settings stored before the switch existed must still load, showing examples.
+    const before = await registryWith({ datameshToken: 'a-token' }).load(ID);
+    expect(before.get('showExamples').composite).toBe(true);
+
+    const hidden = await registryWith({ showExamples: false }).load(ID);
+    expect(hidden.get('showExamples').composite).toBe(false);
   });
 
   it('still loads settings stored when they were', async () => {
