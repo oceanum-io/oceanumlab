@@ -16,6 +16,8 @@ interface IPanelOptions {
   token?: string;
   /** Register the host's sign-in commands, and say whether someone is signed in. */
   signedIn?: boolean;
+  /** Widget props to use instead of the defaults below. */
+  props?: Record<string, unknown>;
 }
 
 function panel(options: IPanelOptions = {}): DatameshConnectWidget {
@@ -48,7 +50,8 @@ function panel(options: IPanelOptions = {}): DatameshConnectWidget {
     settingsChanged: new Signal<unknown, void>({}),
     commands,
     getCurrentWidget: () => new Widget(),
-    auth: null
+    auth: null,
+    ...options.props
   } as unknown as ConstructorParameters<typeof DatameshConnectWidget>[0]);
 }
 
@@ -152,6 +155,93 @@ describe('the Oceanum panel', () => {
     // auth is null on a host with no Oceanum environment.
     const widget = await mount();
     expect(widget.node.textContent).toContain('sign-in is not configured');
+    widget.dispose();
+  });
+});
+
+describe('the Examples switch in the Oceanum panel', () => {
+  const DEMO_ID = '3e4f5a6b-4444-4a2b-8c3d-9e8f7a6b5c4d';
+  const EXAMPLE = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const until = async (test: () => boolean): Promise<void> => {
+    const deadline = Date.now() + 4000;
+    while (!test()) {
+      if (Date.now() > deadline) {
+        throw new Error('timed out');
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+
+  it('saves the choice, and follows the setting once it has changed', async () => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const demo = String(input).includes('/specs/notebook-demo/');
+      const data: unknown = demo
+        ? {
+            id: DEMO_ID,
+            name: 'Notebook Demo',
+            description: null as string | null,
+            modified: '2026-09-22T10:00:00',
+            creator: null as string | null,
+            spec: {
+              kind: 'notebook-demo',
+              version: 1,
+              sections: [
+                { title: 'Start', items: [{ id: EXAMPLE, title: 'Query' }] }
+              ]
+            }
+          }
+        : [];
+      return { ok: true, status: 200, json: async () => data } as Response;
+    }) as typeof fetch;
+    const auth = {
+      environment: { notebookDemo: DEMO_ID },
+      urls: { specs: 'https://specs.example.com' },
+      ready: Promise.resolve(),
+      user: {
+        sub: 'auth0|1',
+        email: 'me@example.com',
+        name: null as string | null,
+        activeOrg: null as string | null,
+        colorScheme: null as string | null
+      },
+      userChanged: new Signal<unknown, unknown>({}),
+      tokenChanged: new Signal<unknown, unknown>({}),
+      signIn: async (): Promise<void> => undefined,
+      signOut: async (): Promise<void> => undefined,
+      getAccessToken: async (): Promise<string> => 'tok'
+    };
+    // What the host keeps: the setting, and the signal it emits when it changes.
+    let shown = true;
+    const saved: boolean[] = [];
+    const settingsChanged = new Signal<unknown, void>({});
+    const widget = await mount({
+      props: {
+        auth,
+        settingsChanged,
+        showExamples: () => shown,
+        setShowExamples: (show: boolean) => saved.push(show)
+      }
+    });
+    const toggle = (): HTMLButtonElement | null =>
+      widget.node.querySelector<HTMLButtonElement>('[role="switch"]');
+    await until(() => toggle() !== null);
+    expect(toggle()!.getAttribute('aria-checked')).toBe('true');
+    expect(widget.node.querySelector('[data-example-id]')).not.toBeNull();
+
+    toggle()!.click();
+    expect(saved).toEqual([false]);
+
+    // The host saves the setting and says so; the panel reads it again.
+    shown = false;
+    settingsChanged.emit();
+    await until(() => toggle()?.getAttribute('aria-checked') === 'false');
+    expect(widget.node.querySelector('[data-example-id]')).toBeNull();
+
     widget.dispose();
   });
 });

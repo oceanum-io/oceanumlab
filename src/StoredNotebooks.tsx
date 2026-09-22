@@ -24,6 +24,14 @@ export interface IStoredNotebooksProps {
   onOpen?: (item: ISpecSummary) => void;
   /** Open a copy of an example, as `onOpen` does for a stored notebook. */
   onOpenExample?: (item: INotebookDemoItem) => void;
+  /** Whether the examples are listed, or folded under their heading. Default true. */
+  showExamples?: boolean;
+  /**
+   * Record the user's choice to show or hide the examples. The Examples heading offers
+   * its switch only where this is given: a switch that could not keep its setting
+   * would flip back on the next load.
+   */
+  onShowExamplesChange?: (show: boolean) => void;
   /**
    * Start signing in the way this host shows it; without it the auth's own `signIn()`
    * is used, which on a JupyterLab server shows no code dialog.
@@ -78,37 +86,68 @@ async function loadExamples(
  */
 function ExampleSections({
   examples,
-  onOpen
+  onOpen,
+  show,
+  onShowChange
 }: {
   examples: Examples;
   onOpen?: (item: INotebookDemoItem) => void;
+  show: boolean;
+  onShowChange?: (show: boolean) => void;
 }): React.ReactElement | null {
   if (examples.state === 'none') {
     return null;
   }
+  const count =
+    examples.state === 'ready'
+      ? examples.sections.reduce(
+          (total, section) => total + section.items.length,
+          0
+        )
+      : null;
+  if (count === 0) {
+    return null;
+  }
+  const heading = (
+    <div className="oceanum-notebooks-heading">
+      Examples
+      <span className="oceanum-notebooks-heading-end">
+        {count !== null && (
+          <span className="oceanum-notebooks-count">{count}</span>
+        )}
+        {onShowChange && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={show}
+            aria-label="Show examples"
+            title={show ? 'Hide the examples' : 'Show the examples'}
+            className="oceanum-notebooks-switch"
+            onClick={() => onShowChange(!show)}
+          >
+            <span className="oceanum-notebooks-switch-thumb" />
+          </button>
+        )}
+      </span>
+    </div>
+  );
+  // Hidden: the heading stays, so the switch is there to bring them back.
+  if (!show) {
+    return <div className="oceanum-notebooks-section">{heading}</div>;
+  }
   if (examples.state === 'error') {
     return (
       <div className="oceanum-notebooks-section">
-        <div className="oceanum-notebooks-heading">Examples</div>
+        {heading}
         <div className="oceanum-text-error">
           The examples could not be loaded. {examples.message}
         </div>
       </div>
     );
   }
-  const count = examples.sections.reduce(
-    (total, section) => total + section.items.length,
-    0
-  );
-  if (count === 0) {
-    return null;
-  }
   return (
     <div className="oceanum-notebooks-section">
-      <div className="oceanum-notebooks-heading">
-        Examples
-        <span className="oceanum-notebooks-count">{count}</span>
-      </div>
+      {heading}
       {examples.sections.map((section, index) => (
         <div key={index}>
           {/* Titles come from the record: React escapes them, never set as HTML. */}
@@ -218,6 +257,8 @@ export function StoredNotebooks({
   auth,
   onOpen,
   onOpenExample,
+  showExamples = true,
+  onShowExamplesChange,
   onSignIn
 }: IStoredNotebooksProps): React.ReactElement {
   const [load, setLoad] = React.useState<Load>({ state: 'loading' });
@@ -343,7 +384,12 @@ export function StoredNotebooks({
         empty="No notebooks have been shared with you."
         onOpen={onOpen}
       />
-      <ExampleSections examples={load.examples} onOpen={onOpenExample} />
+      <ExampleSections
+        examples={load.examples}
+        onOpen={onOpenExample}
+        show={showExamples}
+        onShowChange={onShowExamplesChange}
+      />
     </div>
   );
 }

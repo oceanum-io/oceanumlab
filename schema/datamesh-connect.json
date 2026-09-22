@@ -29,6 +29,12 @@
       "title": "Iterate",
       "description": "After running, send each cell's output back to the AI so it can fix an error or take the next step. Only takes effect with Auto-run code on.",
       "default": false
+    },
+    "showExamples": {
+      "type": "boolean",
+      "title": "Show examples",
+      "description": "List Oceanum's example notebooks in the Notebooks tab, where the site provides them. Also switched from the Examples heading.",
+      "default": true
     }
   },
   "patternProperties": {

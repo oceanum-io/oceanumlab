@@ -79,6 +79,10 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
     const aiBackendUrl = auth?.urls?.ai ?? OCEANUM_AI_BACKEND_URL;
     // The `datameshToken` setting for the AI chat; empty until the settings load.
     let datameshTokenSetting = '';
+    // The `showExamples` setting for the Notebooks tab, and the loaded settings that the
+    // Examples heading's switch writes it back to.
+    let showExamplesSetting = true;
+    let loadedSettings: ISettingRegistry.ISettings | null = null;
     // Tells the sidebar the settings above have changed.
     const settingsChanged = new Signal<JupyterFrontEnd, void>(app);
 
@@ -100,12 +104,14 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
       }
       window.injectToken = set.get('injectToken').user as boolean;
       datameshTokenSetting = set.get('datameshToken').composite as string;
+      showExamplesSetting = set.get('showExamples').composite as boolean;
       settingsChanged.emit();
     };
     //Try to get the datamesh token from the envars
 
     Promise.all([app.restored, settingRegistry.load(PLUGIN_ID)])
       .then(([, setting]) => {
+        loadedSettings = setting;
         // Read the settings
         updateSettings(setting);
 
@@ -162,6 +168,20 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
           .catch(error => {
             console.error('Oceanum: could not open the example.', error);
           });
+      },
+      showExamples: () => showExamplesSetting,
+      // Saved as a user setting, so the choice outlasts the page; the settings'
+      // `changed` signal brings the new value back to the panel.
+      setShowExamples: show => {
+        if (!loadedSettings) {
+          console.warn(
+            'Oceanum: the settings have not loaded, so cannot save.'
+          );
+          return;
+        }
+        loadedSettings.set('showExamples', show).catch(error => {
+          console.error('Oceanum: could not save the Examples setting.', error);
+        });
       }
     });
     datameshConnectWidget.id = 'datamesh-connect';

@@ -7,7 +7,7 @@ import { IOceanumAuth, IOceanumUser } from '../auth/tokens';
 import { notebooksChanged } from '../share/events';
 import type { INotebookDemoItem } from '../share/notebook';
 import { NOTEBOOK_ITEM_SELECTOR } from '../share/plugin';
-import { StoredNotebooks } from '../StoredNotebooks';
+import { IStoredNotebooksProps, StoredNotebooks } from '../StoredNotebooks';
 
 /** A signed-out auth that records whether sign-in was asked for. */
 function signedOut(): IOceanumAuth & { signIns: number } {
@@ -34,7 +34,8 @@ class Harness extends ReactWidget {
   constructor(
     private readonly _auth: IOceanumAuth,
     private readonly _onSignIn?: () => void,
-    private readonly _onOpenExample?: (item: INotebookDemoItem) => void
+    private readonly _onOpenExample?: (item: INotebookDemoItem) => void,
+    private readonly _more: Partial<IStoredNotebooksProps> = {}
   ) {
     super();
   }
@@ -45,6 +46,7 @@ class Harness extends ReactWidget {
         auth={this._auth}
         onSignIn={this._onSignIn}
         onOpenExample={this._onOpenExample}
+        {...this._more}
       />
     );
   }
@@ -206,9 +208,10 @@ describe('the Examples in the Notebooks tab', () => {
 
   async function render(
     auth: IOceanumAuth,
-    onOpenExample?: (item: INotebookDemoItem) => void
+    onOpenExample?: (item: INotebookDemoItem) => void,
+    more: Partial<IStoredNotebooksProps> = {}
   ): Promise<Harness> {
-    const widget = new Harness(auth, undefined, onOpenExample);
+    const widget = new Harness(auth, undefined, onOpenExample, more);
     Widget.attach(widget, document.body);
     const deadline = Date.now() + 4000;
     while (!widget.node.querySelector('.oceanum-notebooks')) {
@@ -345,6 +348,90 @@ describe('the Examples in the Notebooks tab', () => {
       .click();
 
     expect(opened).toEqual([{ id: OTHER_EXAMPLE, title: 'Plot waves' }]);
+    widget.dispose();
+  });
+
+  const switchIn = (widget: Harness): HTMLButtonElement | null =>
+    section(widget, 'Examples')!.querySelector<HTMLButtonElement>(
+      '[role="switch"]'
+    );
+
+  it('puts a switch on the Examples heading that asks to hide them', async () => {
+    stubFetch();
+    const changes: boolean[] = [];
+    const widget = await render(signedIn(DEMO_ID), undefined, {
+      showExamples: true,
+      onShowExamplesChange: show => changes.push(show)
+    });
+
+    const toggle = switchIn(widget)!;
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Show examples');
+    expect(
+      section(widget, 'Examples')!
+        .querySelector('.oceanum-notebooks-heading')!
+        .contains(toggle)
+    ).toBe(true);
+
+    toggle.click();
+
+    expect(changes).toEqual([false]);
+    widget.dispose();
+  });
+
+  it('keeps hidden examples folded under their heading, with the switch to bring them back', async () => {
+    stubFetch();
+    const changes: boolean[] = [];
+    const widget = await render(signedIn(DEMO_ID), undefined, {
+      showExamples: false,
+      onShowExamplesChange: show => changes.push(show)
+    });
+
+    const examples = section(widget, 'Examples')!;
+    expect(examples.querySelector('[data-example-id]')).toBeNull();
+    expect(
+      examples.querySelector('.oceanum-notebooks-count')?.textContent
+    ).toBe('3');
+    // Hidden, not forgotten: the record is still read, and its examples stay out of
+    // Shared with me.
+    expect(fetches).toContain(
+      `https://specs.example.com/specs/notebook-demo/${DEMO_ID}`
+    );
+    expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
+      SHARED
+    ]);
+
+    const toggle = switchIn(widget)!;
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    toggle.click();
+
+    expect(changes).toEqual([true]);
+    widget.dispose();
+  });
+
+  it('shows no error for examples the user has hidden', async () => {
+    stubFetch(
+      () => ({ ok: false, status: 404, json: async () => ({}) }) as Response
+    );
+    const widget = await render(signedIn(DEMO_ID), undefined, {
+      showExamples: false,
+      onShowExamplesChange: () => undefined
+    });
+
+    const examples = section(widget, 'Examples')!;
+    expect(examples.querySelector('.oceanum-text-error')).toBeNull();
+    expect(switchIn(widget)).not.toBeNull();
+    widget.dispose();
+  });
+
+  it('offers no switch where the choice could not be kept', async () => {
+    stubFetch();
+    const widget = await render(signedIn(DEMO_ID));
+
+    expect(switchIn(widget)).toBeNull();
+    expect(
+      section(widget, 'Examples')!.querySelectorAll('[data-example-id]')
+    ).toHaveLength(3);
     widget.dispose();
   });
 });
