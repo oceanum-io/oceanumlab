@@ -364,6 +364,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     // The copy each example was last opened into, so opening it again while that copy
     // is still open brings it forward rather than writing another.
     const exampleCopies = new Map<string, Widget>();
+    // Examples whose copy is still being written, so a second click in that time does
+    // not write a second copy.
+    const openingExamples = new Set<string>();
 
     /**
      * Open a copy of an example as a new file in the Oceanum folder, untrusted and
@@ -385,6 +388,10 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         app.shell.activateById(copy.id);
         return;
       }
+      if (openingExamples.has(id)) {
+        return;
+      }
+      openingExamples.add(id);
       try {
         const record = await store.client.get(id);
         const content = unlinkedNotebookFromRecord(record);
@@ -404,6 +411,8 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         exampleCopies.set(id, widget);
       } catch (error) {
         await reportError('Open from Oceanum failed', error);
+      } finally {
+        openingExamples.delete(id);
       }
     }
 

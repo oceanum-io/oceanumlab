@@ -114,7 +114,7 @@ function ExampleSections({
           {/* Titles come from the record: React escapes them, never set as HTML. */}
           <div className="oceanum-notebooks-subheading">{section.title}</div>
           <ul className="oceanum-notebooks-list">
-            {section.items.map(item => {
+            {section.items.map((item, position) => {
               const attributes = {
                 [EXAMPLE_ID_ATTRIBUTE]: item.id,
                 title: item.summary
@@ -123,7 +123,8 @@ function ExampleSections({
                 <span className="oceanum-notebooks-name">{item.title}</span>
               );
               return (
-                <li key={item.id}>
+                // A record may list the same example twice; the id alone is no key.
+                <li key={`${position}:${item.id}`}>
                   {onOpen ? (
                     <button
                       type="button"

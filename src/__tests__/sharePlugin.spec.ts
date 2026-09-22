@@ -510,6 +510,18 @@ describe('opening an example', () => {
     expect(harness.activated).toEqual([harness.widgets[0].id]);
   });
 
+  it('writes one copy when opened twice before the first finishes', async () => {
+    const harness = activate();
+    const args = { id: ID_A, title: 'Example' };
+
+    await Promise.all([
+      harness.commands.execute(CommandIDs.openExample, args),
+      harness.commands.execute(CommandIDs.openExample, args)
+    ]);
+
+    expect(harness.saved).toEqual(['Oceanum/Example.ipynb']);
+  });
+
   it('writes a fresh copy once the last one was closed', async () => {
     const harness = activate();
     const args = { id: ID_A, title: 'Example' };
