@@ -3,8 +3,17 @@ import * as React from 'react';
 import { IOceanumAuth } from './auth/tokens';
 import { SpecStoreClient } from './share/client';
 import { notebooksChanged } from './share/events';
-import { ISpecSummary, partitionSummaries } from './share/notebook';
+import {
+  INotebookDemoItem,
+  INotebookDemoSection,
+  ISpecSummary,
+  parseNotebookDemo,
+  partitionSummaries
+} from './share/notebook';
 import { SPEC_ID_ATTRIBUTE } from './share/plugin';
+
+/** Example rows carry their record id here, not in SPEC_ID_ATTRIBUTE: see Examples. */
+export const EXAMPLE_ID_ATTRIBUTE = 'data-example-id';
 
 export interface IStoredNotebooksProps {
   auth: IOceanumAuth;
@@ -13,6 +22,8 @@ export interface IStoredNotebooksProps {
    * the list then reads rather than offering a click that does nothing.
    */
   onOpen?: (item: ISpecSummary) => void;
+  /** Open a copy of an example, as `onOpen` does for a stored notebook. */
+  onOpenExample?: (item: INotebookDemoItem) => void;
   /**
    * Start signing in the way this host shows it; without it the auth's own `signIn()`
    * is used, which on a JupyterLab server shows no code dialog.
@@ -20,10 +31,126 @@ export interface IStoredNotebooksProps {
   onSignIn?: () => void;
 }
 
+/** The deployment's Notebook Demo record, which lists the Examples. */
+type Examples =
+  | { state: 'none' }
+  | { state: 'error'; message: string }
+  | { state: 'ready'; sections: INotebookDemoSection[] };
+
 type Load =
   | { state: 'loading' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; items: ISpecSummary[] };
+  | { state: 'ready'; items: ISpecSummary[]; examples: Examples };
+
+/**
+ * Read the Notebook Demo record, if the deployment names one. Never rejects: a failure
+ * here is shown in the Examples section and leaves the rest of the tab alone.
+ */
+async function loadExamples(
+  auth: IOceanumAuth,
+  specsUrl: string,
+  id: string | null
+): Promise<Examples> {
+  if (!id) {
+    return { state: 'none' };
+  }
+  try {
+    const client = new SpecStoreClient({
+      specsUrl,
+      getAccessToken: () => auth.getAccessToken(),
+      specType: 'notebook-demo'
+    });
+    const record = await client.get(id);
+    return { state: 'ready', sections: parseNotebookDemo(record.spec) };
+  } catch (error) {
+    return {
+      state: 'error',
+      message:
+        error instanceof Error ? error.message : 'Could not reach Oceanum.io.'
+    };
+  }
+}
+
+/**
+ * The curated examples. Their rows deliberately leave out SPEC_ID_ATTRIBUTE and the
+ * stored-notebook row class: the share plugin's row menu (Open, Rename, Share, Delete)
+ * is bound to those, and none of it applies to Oceanum's own example records.
+ */
+function ExampleSections({
+  examples,
+  onOpen
+}: {
+  examples: Examples;
+  onOpen?: (item: INotebookDemoItem) => void;
+}): React.ReactElement | null {
+  if (examples.state === 'none') {
+    return null;
+  }
+  if (examples.state === 'error') {
+    return (
+      <div className="oceanum-notebooks-section">
+        <div className="oceanum-notebooks-heading">Examples</div>
+        <div className="oceanum-text-error">
+          The examples could not be loaded. {examples.message}
+        </div>
+      </div>
+    );
+  }
+  const count = examples.sections.reduce(
+    (total, section) => total + section.items.length,
+    0
+  );
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <div className="oceanum-notebooks-section">
+      <div className="oceanum-notebooks-heading">
+        Examples
+        <span className="oceanum-notebooks-count">{count}</span>
+      </div>
+      {examples.sections.map((section, index) => (
+        <div key={index}>
+          {/* Titles come from the record: React escapes them, never set as HTML. */}
+          <div className="oceanum-notebooks-subheading">{section.title}</div>
+          <ul className="oceanum-notebooks-list">
+            {section.items.map((item, position) => {
+              const attributes = {
+                [EXAMPLE_ID_ATTRIBUTE]: item.id,
+                title: item.summary
+              };
+              const name = (
+                <span className="oceanum-notebooks-name">{item.title}</span>
+              );
+              return (
+                // A record may list the same example twice; the id alone is no key.
+                <li key={`${position}:${item.id}`}>
+                  {onOpen ? (
+                    <button
+                      type="button"
+                      className="oceanum-notebooks-example"
+                      onClick={() => onOpen(item)}
+                      {...attributes}
+                    >
+                      {name}
+                    </button>
+                  ) : (
+                    <div
+                      className="oceanum-notebooks-example oceanum-notebooks-item-static"
+                      {...attributes}
+                    >
+                      {name}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Section({
   title,
@@ -90,6 +217,7 @@ function Section({
 export function StoredNotebooks({
   auth,
   onOpen,
+  onOpenExample,
   onSignIn
 }: IStoredNotebooksProps): React.ReactElement {
   const [load, setLoad] = React.useState<Load>({ state: 'loading' });
@@ -115,7 +243,7 @@ export function StoredNotebooks({
     let cancelled = false;
     const specs = auth.urls?.specs ?? null;
     if (!user || !specs) {
-      setLoad({ state: 'ready', items: [] });
+      setLoad({ state: 'ready', items: [], examples: { state: 'none' } });
       return;
     }
     setLoad({ state: 'loading' });
@@ -125,9 +253,14 @@ export function StoredNotebooks({
           specsUrl: specs,
           getAccessToken: () => auth.getAccessToken()
         });
-        const items = await client.list();
+        // Only the record the deployment names: every signed-in user can create
+        // notebook-demo records, so the examples never come from a listing.
+        const [items, examples] = await Promise.all([
+          client.list(),
+          loadExamples(auth, specs, auth.environment?.notebookDemo ?? null)
+        ]);
         if (!cancelled) {
-          setLoad({ state: 'ready', items });
+          setLoad({ state: 'ready', items, examples });
         }
       } catch (error) {
         if (!cancelled) {
@@ -187,6 +320,15 @@ export function StoredNotebooks({
   }
 
   const { mine, shared } = partitionSummaries(load.items, user.email);
+  // A public example is readable by everyone, so the listing returns it as shared with
+  // every signed-in user; it is shown under Examples instead.
+  const exampleIds = new Set(
+    load.examples.state === 'ready'
+      ? load.examples.sections.flatMap(section =>
+          section.items.map(item => item.id)
+        )
+      : []
+  );
   return (
     <div className="oceanum-notebooks">
       <Section
@@ -197,10 +339,11 @@ export function StoredNotebooks({
       />
       <Section
         title="Shared with me"
-        items={shared}
+        items={shared.filter(item => !exampleIds.has(item.id))}
         empty="No notebooks have been shared with you."
         onOpen={onOpen}
       />
+      <ExampleSections examples={load.examples} onOpen={onOpenExample} />
     </div>
   );
 }

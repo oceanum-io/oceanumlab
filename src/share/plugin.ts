@@ -16,7 +16,7 @@ import { IMainMenu } from '@jupyterlab/mainmenu';
 import type { INotebookContent } from '@jupyterlab/nbformat';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import type { ReadonlyPartialJSONObject } from '@lumino/coreutils';
-import { Menu } from '@lumino/widgets';
+import { Menu, type Widget } from '@lumino/widgets';
 
 import { startSignIn } from '../auth/startSignIn';
 import { IOceanumAuth } from '../auth/tokens';
@@ -37,7 +37,8 @@ import {
   reportForShareFailures,
   sanitizeName,
   shareLink,
-  uniqueNotebookPath
+  uniqueNotebookPath,
+  unlinkedNotebookFromRecord
 } from './notebook';
 import {
   hideFileBrowser,
@@ -49,6 +50,7 @@ import { NotebookListBody, ShareBody } from './widgets';
 
 export const CommandIDs = {
   open: 'oceanum-share:open',
+  openExample: 'oceanum-share:open-example',
   save: 'oceanum-share:save',
   share: 'oceanum-share:share',
   rename: 'oceanum-share:rename',
@@ -356,6 +358,61 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         await openRecord(store, await store.client.get(id));
       } catch (error) {
         await reportError('Open from Oceanum failed', error);
+      }
+    }
+
+    // The copy each example was last opened into, so opening it again while that copy
+    // is still open brings it forward rather than writing another.
+    const exampleCopies = new Map<string, Widget>();
+    // Examples whose copy is still being written, so a second click in that time does
+    // not write a second copy.
+    const openingExamples = new Set<string>();
+
+    /**
+     * Open a copy of an example as a new file in the Oceanum folder, untrusted and
+     * linked to nothing. Not `openRecord`: that links the file to the example's record,
+     * which is Oceanum's and read-only to everyone else, so the first save would be
+     * refused. Unlinked, the first save creates a record of the user's own.
+     */
+    async function openExample(id: string, title: string): Promise<void> {
+      if (
+        !store ||
+        !(await ensureSignedIn(
+          'Opening notebooks needs an Oceanum.io account.'
+        ))
+      ) {
+        return;
+      }
+      const copy = exampleCopies.get(id);
+      if (copy && !copy.isDisposed) {
+        app.shell.activateById(copy.id);
+        return;
+      }
+      if (openingExamples.has(id)) {
+        return;
+      }
+      openingExamples.add(id);
+      try {
+        const record = await store.client.get(id);
+        const content = unlinkedNotebookFromRecord(record);
+        const path = uniqueNotebookPath(
+          title || record.name,
+          await oceanumFolderNames()
+        );
+        await docManager.services.contents.save(path, {
+          type: 'notebook',
+          format: 'json',
+          content
+        });
+        const widget = docManager.openOrReveal(path);
+        if (!widget) {
+          throw new Error(`Could not open ${path}.`);
+        }
+        exampleCopies.set(id, widget);
+      } catch (error) {
+        await reportError('Open from Oceanum failed', error);
+      } finally {
+        openingExamples.delete(id);
       }
     }
 
@@ -957,6 +1014,20 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       execute: async args => {
         const id = rowSpecId(args);
         await (id ? openById(id) : openFromOceanum());
+      }
+    });
+    // Run by the Notebooks tab's Examples; not offered in menus or the palette.
+    app.commands.addCommand(CommandIDs.openExample, {
+      label: 'Open a copy',
+      caption: 'Open a copy of an Oceanum example notebook',
+      isEnabled: () => signedIn(),
+      execute: async args => {
+        if (isSpecId(args.id)) {
+          await openExample(
+            args.id,
+            typeof args.title === 'string' ? args.title : ''
+          );
+        }
       }
     });
     app.commands.addCommand(CommandIDs.save, {

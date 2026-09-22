@@ -90,6 +90,8 @@ export interface ISpecStoreClientOptions {
   specsUrl: string;
   /** Returns a current access token or `null`. Called for every request. */
   getAccessToken: () => Promise<string | null>;
+  /** The spec type the client reads and writes; `notebook` unless given. */
+  specType?: string;
   fetch?: typeof fetch;
 }
 
@@ -109,10 +111,11 @@ function isRecord(value: unknown): value is ISpecRecord {
   return isSummary(value) && 'spec' in value;
 }
 
-/** Client for the `notebook` spec type of the Oceanum spec store. */
+/** Client for one spec type of the Oceanum spec store, `notebook` by default. */
 export class SpecStoreClient {
   constructor(options: ISpecStoreClientOptions) {
-    this._base = `${options.specsUrl.replace(/\/+$/, '')}/specs/notebook`;
+    const specType = options.specType ?? 'notebook';
+    this._base = `${options.specsUrl.replace(/\/+$/, '')}/specs/${specType}`;
     this._getAccessToken = options.getAccessToken;
     this._fetch = options.fetch ?? ((input, init) => fetch(input, init));
   }

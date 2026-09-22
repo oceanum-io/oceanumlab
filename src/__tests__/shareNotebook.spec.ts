@@ -6,6 +6,7 @@ import {
   isSpecId,
   nameFromPath,
   notebookFromRecord,
+  parseNotebookDemo,
   parseShareEmails,
   parseTimestamp,
   partitionSummaries,
@@ -14,6 +15,7 @@ import {
   sanitizeName,
   shareLink,
   uniqueNotebookPath,
+  unlinkedNotebookFromRecord,
   withoutTrust
 } from '../share/notebook';
 
@@ -181,6 +183,132 @@ describe('notebookFromRecord', () => {
       expect(() =>
         notebookFromRecord({ ...base, description: null, spec }, SPECS)
       ).toThrow(/not a valid notebook/);
+    }
+  });
+});
+
+describe('unlinkedNotebookFromRecord', () => {
+  const base = {
+    id: ID,
+    name: 'Waves',
+    description: 'Wave stats',
+    modified: '2026-09-12T10:00:00',
+    creator: null as string | null
+  };
+
+  it('links the copy to nothing, even when the stored notebook carries a link', () => {
+    const spec = notebook('', { oceanum: { spec_id: ID, specs_url: SPECS } });
+    const content = unlinkedNotebookFromRecord({ ...base, spec });
+    expect(content.metadata).not.toHaveProperty('oceanum');
+    expect(content.metadata.kernelspec).toBeDefined();
+    expect(content.cells).toHaveLength(2);
+  });
+
+  it('arrives untrusted', () => {
+    const spec = notebook();
+    spec.cells[1].metadata = { trusted: true, tags: ['keep'] };
+    const content = unlinkedNotebookFromRecord({ ...base, spec });
+    expect(content.cells[1].metadata).toEqual({ tags: ['keep'] });
+  });
+
+  it('rejects records that are not notebooks', () => {
+    expect(() =>
+      unlinkedNotebookFromRecord({ ...base, spec: { nbformat: 3 } })
+    ).toThrow(/not a valid notebook/);
+  });
+});
+
+describe('parseNotebookDemo', () => {
+  const OTHER = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
+  const demo = (sections: unknown, extra: object = {}): unknown => ({
+    kind: 'notebook-demo',
+    version: 1,
+    sections,
+    ...extra
+  });
+
+  let warn: jest.SpyInstance;
+  beforeEach(() => {
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  it('keeps sections and items in record order', () => {
+    const sections = parseNotebookDemo(
+      demo(
+        [
+          {
+            title: 'Getting started',
+            items: [
+              { id: ID, title: 'Query', summary: 'One line' },
+              { id: OTHER, title: 'Plot', note: 'ignored' }
+            ]
+          },
+          { title: 'Waves', items: [{ id: OTHER, title: 'Spectra' }] }
+        ],
+        { owner: 'ignored' }
+      )
+    );
+    expect(sections).toEqual([
+      {
+        title: 'Getting started',
+        items: [
+          { id: ID, title: 'Query', summary: 'One line' },
+          { id: OTHER, title: 'Plot' }
+        ]
+      },
+      { title: 'Waves', items: [{ id: OTHER, title: 'Spectra' }] }
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('skips items without a record id or a title', () => {
+    const sections = parseNotebookDemo(
+      demo([
+        {
+          title: 'Mixed',
+          items: [
+            { id: '../eidos', title: 'Not a record id' },
+            { id: ID, title: '   ' },
+            { id: ID },
+            'not an item',
+            { id: OTHER, title: 'Kept', summary: 42 }
+          ]
+        }
+      ])
+    );
+    expect(sections).toEqual([
+      { title: 'Mixed', items: [{ id: OTHER, title: 'Kept' }] }
+    ]);
+  });
+
+  it('drops sections with no title or nothing left to list', () => {
+    const sections = parseNotebookDemo(
+      demo([
+        { title: 'Empty', items: [] },
+        { title: 'All invalid', items: [{ id: 'x', title: 'y' }] },
+        { title: '', items: [{ id: ID, title: 'Untitled section' }] },
+        { title: 'No items' }
+      ])
+    );
+    expect(sections).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('reads nothing from a record of another kind or version, and says so once', () => {
+    for (const spec of [
+      demo([], { kind: 'workspace' }),
+      demo([], { version: 2 }),
+      { kind: 'notebook-demo', version: 1, sections: {} },
+      null,
+      [],
+      'notebook-demo'
+    ]) {
+      warn.mockClear();
+      expect(parseNotebookDemo(spec)).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
     }
   });
 });
