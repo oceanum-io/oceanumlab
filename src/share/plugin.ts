@@ -29,6 +29,7 @@ import {
   ISpecRecord,
   METADATA_KEY,
   notebookFromRecord,
+  notebookFromUpload,
   notebookNamesFor,
   OCEANUM_DIR,
   partitionSummaries,
@@ -42,15 +43,20 @@ import {
 } from './notebook';
 import {
   hideFileBrowser,
+  moveToTop,
+  NON_NOTEBOOK_NEW_COMMANDS,
+  OCEANUM_PANEL_ID,
   pruneBeforeEachOpen,
   pruneFileMenu,
   routeSaves
 } from './oceanumOnly';
+import { chooseNotebookFile } from './upload';
 import { NotebookListBody, ShareBody } from './widgets';
 
 export const CommandIDs = {
   open: 'oceanum-share:open',
   openExample: 'oceanum-share:open-example',
+  upload: 'oceanum-share:upload',
   save: 'oceanum-share:save',
   share: 'oceanum-share:share',
   rename: 'oceanum-share:rename',
@@ -319,6 +325,23 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       return null;
     }
 
+    /** Write a notebook to `path` on the local drive and open it. */
+    async function writeAndOpen(
+      path: string,
+      content: INotebookContent
+    ): Promise<Widget> {
+      await docManager.services.contents.save(path, {
+        type: 'notebook',
+        format: 'json',
+        content
+      });
+      const widget = docManager.openOrReveal(path);
+      if (!widget) {
+        throw new Error(`Could not open ${path}.`);
+      }
+      return widget;
+    }
+
     /** Write a record to the local drive as `Oceanum/<name>.ipynb` and open it. */
     async function openRecord(s: IStore, record: ISpecRecord): Promise<void> {
       // Already open: bring it forward rather than writing a second copy.
@@ -335,14 +358,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       const path =
         (await pathHoldingRecord(s, record, names)) ??
         uniqueNotebookPath(record.name, names);
-      await docManager.services.contents.save(path, {
-        type: 'notebook',
-        format: 'json',
-        content
-      });
-      if (!docManager.openOrReveal(path)) {
-        throw new Error(`Could not open ${path}.`);
-      }
+      await writeAndOpen(path, content);
     }
 
     async function openById(id: string): Promise<void> {
@@ -399,20 +415,43 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
           title || record.name,
           await oceanumFolderNames()
         );
-        await docManager.services.contents.save(path, {
-          type: 'notebook',
-          format: 'json',
-          content
-        });
-        const widget = docManager.openOrReveal(path);
-        if (!widget) {
-          throw new Error(`Could not open ${path}.`);
-        }
-        exampleCopies.set(id, widget);
+        exampleCopies.set(id, await writeAndOpen(path, content));
       } catch (error) {
         await reportError('Open from Oceanum failed', error);
       } finally {
         openingExamples.delete(id);
+      }
+    }
+
+    /**
+     * Bring a notebook from the user's computer into the Oceanum folder and open it,
+     * untrusted and linked to nothing. It reaches Oceanum on its first save, like any
+     * new notebook; nothing is sent on upload.
+     */
+    async function uploadNotebook(): Promise<void> {
+      if (
+        !store ||
+        !(await ensureSignedIn(
+          'Uploading notebooks needs an Oceanum.io account.'
+        ))
+      ) {
+        return;
+      }
+      try {
+        const file = await chooseNotebookFile();
+        if (!file) {
+          return;
+        }
+        const content = notebookFromUpload(await file.text());
+        const path = uniqueNotebookPath(file.name, await oceanumFolderNames());
+        await writeAndOpen(path, content);
+        // Outside Oceanum-only mode a plain Save stays local.
+        Notification.info(
+          `Uploaded "${file.name}". ${oceanumOnly ? 'Save it' : 'Use Save to Oceanum'} to store it on Oceanum.io.`,
+          { autoClose: 5000 }
+        );
+      } catch (error) {
+        await reportError('Upload failed', error);
       }
     }
 
@@ -1030,6 +1069,12 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         }
       }
     });
+    app.commands.addCommand(CommandIDs.upload, {
+      label: label('Upload Notebook…'),
+      caption: 'Upload a notebook from this computer, to save on Oceanum.io',
+      isEnabled: () => signedIn(),
+      execute: () => uploadNotebook()
+    });
     app.commands.addCommand(CommandIDs.save, {
       label: label('Save to Oceanum'),
       caption: 'Save the notebook to Oceanum.io',
@@ -1084,6 +1129,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     const commands = [
       CommandIDs.open,
+      CommandIDs.upload,
       CommandIDs.save,
       CommandIDs.share,
       CommandIDs.rename,
@@ -1146,13 +1192,20 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     if (oceanumOnly) {
       void app.restored.then(() => {
-        hideFileBrowser(app.shell);
+        hideFileBrowser(app.shell, OCEANUM_PANEL_ID);
+        // Oceanum is where notebooks live now, so its panel leads the sidebar.
+        moveToTop(app.shell, OCEANUM_PANEL_ID);
         // IFileMenu is the narrow interface; the menu itself is a Lumino Menu, which
         // is what can drop items.
         const fileMenu = mainMenu?.fileMenu;
         if (fileMenu instanceof Menu) {
           pruneFileMenu(fileMenu);
           pruneBeforeEachOpen(fileMenu);
+        }
+        const newMenu = mainMenu?.fileMenu.newMenu;
+        if (newMenu instanceof Menu) {
+          pruneFileMenu(newMenu, NON_NOTEBOOK_NEW_COMMANDS);
+          pruneBeforeEachOpen(newMenu, NON_NOTEBOOK_NEW_COMMANDS);
         }
         routeSaves(tracker, pushQuietly);
       });

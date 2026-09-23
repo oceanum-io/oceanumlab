@@ -24,6 +24,8 @@ export interface IStoredNotebooksProps {
   onOpen?: (item: ISpecSummary) => void;
   /** Open a copy of an example, as `onOpen` does for a stored notebook. */
   onOpenExample?: (item: INotebookDemoItem) => void;
+  /** Upload a notebook from the user's computer; no Upload button without it. */
+  onUpload?: () => void;
   /**
    * Whether the examples are listed, or folded under their heading. Default true. Null
    * while the setting is still loading: the Examples wait for it, so examples a user
@@ -262,6 +264,7 @@ export function StoredNotebooks({
   auth,
   onOpen,
   onOpenExample,
+  onUpload,
   showExamples = true,
   onShowExamplesChange,
   onSignIn
@@ -377,6 +380,19 @@ export function StoredNotebooks({
   );
   return (
     <div className="oceanum-notebooks">
+      {/* Without a spec store the upload command does nothing. */}
+      {onUpload && auth.urls?.specs ? (
+        <div className="oceanum-notebooks-actions">
+          <button
+            type="button"
+            className="oceanum-notebooks-upload"
+            title="Upload a notebook from this computer, to save on Oceanum.io"
+            onClick={onUpload}
+          >
+            Upload notebook…
+          </button>
+        </div>
+      ) : null}
       <Section
         title="My notebooks"
         items={mine}

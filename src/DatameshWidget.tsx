@@ -996,6 +996,8 @@ export interface IDatameshWidgetProps {
   openStoredNotebook?: (id: string) => void;
   /** Open a copy of an example by spec store id, named from its title. */
   openExample?: (id: string, title: string) => void;
+  /** Upload a notebook from the user's computer. */
+  uploadNotebook?: () => void;
   /**
    * The `showExamples` setting: whether the Notebooks tab lists the examples; null
    * until the settings have loaded.
@@ -1021,6 +1023,7 @@ function PanelTabs({
   renderDatamesh,
   openStoredNotebook,
   openExample,
+  uploadNotebook,
   showExamples,
   setShowExamples,
   selected,
@@ -1032,6 +1035,7 @@ function PanelTabs({
   renderDatamesh: () => React.ReactElement;
   openStoredNotebook?: (id: string) => void;
   openExample?: (id: string, title: string) => void;
+  uploadNotebook?: () => void;
   showExamples?: () => boolean | null;
   setShowExamples?: (show: boolean) => void;
   selected: string;
@@ -1053,6 +1057,7 @@ function PanelTabs({
             onOpenExample={
               openExample && (item => openExample(item.id, item.title))
             }
+            onUpload={uploadNotebook}
             showExamples={examplesShown}
             onShowExamplesChange={setShowExamples}
             onSignIn={() => {
@@ -1197,6 +1202,7 @@ export class DatameshConnectWidget extends ReactWidget {
               renderDatamesh={() => this.renderDatamesh()}
               openStoredNotebook={this.props.openStoredNotebook}
               openExample={this.props.openExample}
+              uploadNotebook={this.props.uploadNotebook}
               showExamples={this.props.showExamples}
               setShowExamples={this.props.setShowExamples}
               selected={this.selectedTab}

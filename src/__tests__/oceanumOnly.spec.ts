@@ -7,13 +7,17 @@ import {
   FILE_BROWSER_ID,
   hideFileBrowser,
   LOCAL_FILE_COMMANDS,
+  moveToTop,
+  NON_NOTEBOOK_NEW_COMMANDS,
+  OCEANUM_PANEL_ID,
   pruneBeforeEachOpen,
   pruneFileMenu,
   routeSaves
 } from '../share/oceanumOnly';
 
 describe('hideFileBrowser', () => {
-  it('closes the file browser without disposing it, and leaves the rest', () => {
+  /** A left area holding the file browser and the running-sessions panel. */
+  function leftArea(): { left: Panel; browser: Widget; running: Widget } {
     const left = new Panel();
     const browser = new Widget();
     browser.id = FILE_BROWSER_ID;
@@ -21,8 +25,24 @@ describe('hideFileBrowser', () => {
     running.id = 'jp-running-sessions';
     left.addWidget(browser);
     left.addWidget(running);
+    return { left, browser, running };
+  }
 
-    expect(hideFileBrowser({ widgets: () => left.widgets })).toBe(true);
+  function shell(left: Panel) {
+    const activated: string[] = [];
+    return {
+      activated,
+      widgets: () => left.widgets,
+      activateById: (id: string): void => {
+        activated.push(id);
+      }
+    };
+  }
+
+  it('closes the file browser without disposing it, and leaves the rest', () => {
+    const { left, browser, running } = leftArea();
+
+    expect(hideFileBrowser(shell(left))).toBe(true);
 
     expect(left.widgets).toEqual([running]);
     // Other extensions still hold it through IDefaultFileBrowser.
@@ -31,7 +51,30 @@ describe('hideFileBrowser', () => {
 
   it('reports when there is none to hide', () => {
     const left = new Panel();
-    expect(hideFileBrowser({ widgets: () => left.widgets })).toBe(false);
+    expect(hideFileBrowser(shell(left))).toBe(false);
+  });
+
+  it('opens the replacement when the file browser was the open panel', () => {
+    const { left } = leftArea();
+    Widget.attach(left, document.body);
+    const fake = shell(left);
+
+    hideFileBrowser(fake, OCEANUM_PANEL_ID);
+
+    expect(fake.activated).toEqual([OCEANUM_PANEL_ID]);
+    Widget.detach(left);
+  });
+
+  it('leaves a collapsed sidebar collapsed', () => {
+    const { left, browser } = leftArea();
+    Widget.attach(left, document.body);
+    browser.hide();
+    const fake = shell(left);
+
+    hideFileBrowser(fake, OCEANUM_PANEL_ID);
+
+    expect(fake.activated).toEqual([]);
+    Widget.detach(left);
   });
 });
 
@@ -189,5 +232,86 @@ describe('routeSaves', () => {
     second.saveState.emit('failed');
     first.saveState.emit('completed');
     expect(pushed).toEqual([first.panel, second.panel, first.panel]);
+  });
+});
+
+describe('the File > New menu', () => {
+  it('loses the entries for files that are not notebooks', () => {
+    const { menu } = fileMenu([
+      'console:create',
+      'notebook:create-new',
+      ...NON_NOTEBOOK_NEW_COMMANDS
+    ]);
+
+    expect(pruneFileMenu(menu, NON_NOTEBOOK_NEW_COMMANDS)).toBe(2);
+
+    expect(menuCommands(menu)).toEqual([
+      'console:create',
+      'notebook:create-new'
+    ]);
+  });
+});
+
+describe('moveToTop', () => {
+  /** A left area in a saved order, and a shell that re-adds by rank as JupyterLab does. */
+  function sidebar(ids: string[]) {
+    const left = new Panel();
+    for (const id of ids) {
+      const widget = new Widget();
+      widget.id = id;
+      left.addWidget(widget);
+    }
+    Widget.attach(left, document.body);
+    const activated: string[] = [];
+    const added: [string, number][] = [];
+    const shell = {
+      widgets: () => left.widgets,
+      add: (widget: Widget, _: 'left', options: { rank: number }): void => {
+        added.push([widget.id, options.rank]);
+        widget.hide();
+        left.insertWidget(0, widget);
+      },
+      activateById: (id: string): void => {
+        activated.push(id);
+      }
+    };
+    const order = (): string[] => left.widgets.map(widget => widget.id);
+    const get = (id: string): Widget => left.widgets.find(w => w.id === id)!;
+    return { left, shell, activated, added, order, get };
+  }
+
+  it('puts a panel a returning user had last back in front, and reopens it', () => {
+    const bar = sidebar(['jp-running-sessions', OCEANUM_PANEL_ID]);
+    bar.get('jp-running-sessions').hide();
+
+    expect(moveToTop(bar.shell, OCEANUM_PANEL_ID)).toBe(true);
+
+    expect(bar.added).toEqual([[OCEANUM_PANEL_ID, 0]]);
+    expect(bar.order()).toEqual([OCEANUM_PANEL_ID, 'jp-running-sessions']);
+    expect(bar.activated).toEqual([OCEANUM_PANEL_ID]);
+    Widget.detach(bar.left);
+  });
+
+  it('does not open a panel that was closed', () => {
+    const bar = sidebar(['jp-running-sessions', OCEANUM_PANEL_ID]);
+    bar.get(OCEANUM_PANEL_ID).hide();
+
+    moveToTop(bar.shell, OCEANUM_PANEL_ID);
+
+    expect(bar.order()[0]).toBe(OCEANUM_PANEL_ID);
+    expect(bar.activated).toEqual([]);
+    Widget.detach(bar.left);
+  });
+
+  it('leaves the sidebar alone when the panel is already first or absent', () => {
+    const first = sidebar([OCEANUM_PANEL_ID, 'jp-running-sessions']);
+    expect(moveToTop(first.shell, OCEANUM_PANEL_ID)).toBe(false);
+    expect(first.added).toEqual([]);
+    Widget.detach(first.left);
+
+    const absent = sidebar(['jp-running-sessions']);
+    expect(moveToTop(absent.shell, OCEANUM_PANEL_ID)).toBe(false);
+    expect(absent.added).toEqual([]);
+    Widget.detach(absent.left);
   });
 });

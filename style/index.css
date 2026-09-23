@@ -623,6 +623,25 @@
   cursor: default;
 }
 
+.oceanum-notebooks-actions {
+  padding: 6px 8px 2px;
+}
+
+.oceanum-notebooks-upload {
+  padding: 3px 8px;
+  border: var(--jp-border-width) solid var(--jp-border-color1);
+  border-radius: var(--jp-border-radius);
+  background: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-family: var(--jp-ui-font-family);
+  font-size: var(--jp-ui-font-size1);
+  cursor: pointer;
+}
+
+.oceanum-notebooks-upload:hover {
+  background: var(--jp-layout-color2);
+}
+
 .oceanum-notebooks-item-static:hover {
   background: transparent;
 }
