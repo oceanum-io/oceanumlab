@@ -242,6 +242,32 @@ describe('the Examples in the Notebooks tab', () => {
       row => row.getAttribute(attribute) ?? ''
     );
 
+  it('offers Upload where the host can upload, and runs it on click', async () => {
+    stubFetch();
+    let uploads = 0;
+    const widget = await render(signedIn(), undefined, {
+      onUpload: () => {
+        uploads++;
+      }
+    });
+
+    const button = widget.node.querySelector<HTMLButtonElement>(
+      '.oceanum-notebooks-upload'
+    );
+    button!.click();
+
+    expect(uploads).toBe(1);
+    Widget.detach(widget);
+  });
+
+  it('has no Upload button where the host cannot upload', async () => {
+    stubFetch();
+    const widget = await render(signedIn());
+
+    expect(widget.node.querySelector('.oceanum-notebooks-upload')).toBeNull();
+    Widget.detach(widget);
+  });
+
   it('lists the record’s examples in order, under their section titles', async () => {
     stubFetch();
     const widget = await render(signedIn(DEMO_ID));

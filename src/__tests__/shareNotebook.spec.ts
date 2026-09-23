@@ -6,6 +6,7 @@ import {
   isSpecId,
   nameFromPath,
   notebookFromRecord,
+  notebookFromUpload,
   parseNotebookDemo,
   parseShareEmails,
   parseTimestamp,
@@ -575,5 +576,45 @@ describe('reportForShareFailures', () => {
       kind: 'partial',
       named: ['b@example.com']
     });
+  });
+});
+
+describe('notebookFromUpload', () => {
+  const linkedAndTrusted: INotebookContent = {
+    nbformat: 4,
+    nbformat_minor: 5,
+    metadata: {
+      oceanum: { spec_id: ID, specs_url: SPECS },
+      kernelspec: { name: 'python', display_name: 'Python' }
+    },
+    cells: [
+      { cell_type: 'markdown', source: 'hi', metadata: { trusted: true } }
+    ]
+  };
+
+  it('drops the oceanum link and cell trust, and keeps everything else', () => {
+    const content = notebookFromUpload(JSON.stringify(linkedAndTrusted));
+
+    expect(content.metadata).toEqual({
+      kernelspec: { name: 'python', display_name: 'Python' }
+    });
+    expect(content.cells).toEqual([
+      { cell_type: 'markdown', source: 'hi', metadata: {} }
+    ]);
+  });
+
+  it.each([
+    ['text that is not JSON', '{'],
+    ['a JSON array', '[]'],
+    ['nbformat 3', JSON.stringify({ ...linkedAndTrusted, nbformat: 3 })],
+    ['no cells', JSON.stringify({ nbformat: 4, metadata: {} })],
+    ['no metadata', JSON.stringify({ nbformat: 4, cells: [] })]
+  ])('refuses %s, without quoting the file', (_, text) => {
+    expect(() => notebookFromUpload(text)).toThrow(/not a Jupyter notebook/);
+    try {
+      notebookFromUpload(text);
+    } catch (error) {
+      expect((error as Error).message).not.toContain(text);
+    }
   });
 });

@@ -14,6 +14,9 @@ import type { Menu, Widget } from '@lumino/widgets';
 /** The widget id `@jupyterlab/filebrowser-extension:browser` gives the file browser. */
 export const FILE_BROWSER_ID = 'filebrowser';
 
+/** The widget id of this extension's Oceanum.io panel, which takes the browser's place. */
+export const OCEANUM_PANEL_ID = 'datamesh-connect';
+
 /**
  * File menu entries that manage local files. Save, Save All and Rename stay: saving is
  * routed to Oceanum, and renaming the local file is how a notebook gets its name.
@@ -29,16 +32,34 @@ export const LOCAL_FILE_COMMANDS: readonly string[] = [
 ];
 
 /**
+ * File > New entries for files that are not notebooks. The spec store holds notebooks
+ * only, so such a file could never be saved anywhere the user can see.
+ */
+export const NON_NOTEBOOK_NEW_COMMANDS: readonly string[] = [
+  'fileeditor:create-new',
+  'fileeditor:create-new-markdown-file'
+];
+
+/**
  * Take the file browser out of the sidebar; true if it was there. It is closed, not
  * disposed: other extensions hold it through IDefaultFileBrowser and still use it to
- * open paths.
+ * open paths. If it was the open panel, `instead` is opened in its place; a sidebar the
+ * user had collapsed stays collapsed.
  */
-export function hideFileBrowser(shell: {
-  widgets(area: 'left'): Iterable<Widget>;
-}): boolean {
+export function hideFileBrowser(
+  shell: {
+    widgets(area: 'left'): Iterable<Widget>;
+    activateById(id: string): void;
+  },
+  instead?: string
+): boolean {
   for (const widget of shell.widgets('left')) {
     if (widget.id === FILE_BROWSER_ID) {
+      const wasOpen = widget.isVisible;
       widget.close();
+      if (wasOpen && instead) {
+        shell.activateById(instead);
+      }
       return true;
     }
   }

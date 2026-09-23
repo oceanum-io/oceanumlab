@@ -43,8 +43,24 @@ jest.mock('@jupyterlab/apputils', () => {
   };
 });
 
+/** What the file picker answers: a file, or null for a cancelled picker. */
+const mockPicked: { file: { name: string; text: string } | null } = {
+  file: null
+};
+const mockPickerCalls = { count: 0 };
+
+jest.mock('../share/upload', () => ({
+  chooseNotebookFile: async () => {
+    mockPickerCalls.count++;
+    const picked = mockPicked.file;
+    return picked && { name: picked.name, text: async () => picked.text };
+  }
+}));
+
 const originalFetch = globalThis.fetch;
 afterEach(() => {
+  mockPicked.file = null;
+  mockPickerCalls.count = 0;
   globalThis.fetch = originalFetch;
   mockDialog.accept = true;
   mockDialog.value = null;
@@ -561,5 +577,88 @@ describe('opening an example', () => {
     const harness = activate({ user: null });
 
     expect(harness.commands.isEnabled(CommandIDs.openExample)).toBe(false);
+  });
+});
+
+describe('uploading a notebook', () => {
+  // As downloaded from someone else's record: linked to it, with a trusted cell.
+  const downloaded: INotebookContent = {
+    ...notebook(ID_B),
+    cells: [
+      {
+        cell_type: 'code',
+        source: 'print(1)',
+        metadata: { trusted: true },
+        outputs: [],
+        execution_count: null
+      }
+    ]
+  };
+
+  it('writes an untrusted copy linked to nothing into the Oceanum folder, and opens it', async () => {
+    mockPicked.file = {
+      name: 'analysis.ipynb',
+      text: JSON.stringify(downloaded)
+    };
+    const harness = activate();
+
+    await harness.commands.execute(CommandIDs.upload);
+
+    const path = 'Oceanum/analysis.ipynb';
+    expect(harness.saved).toEqual([path]);
+    expect(harness.opened).toEqual([path]);
+    const content = harness.written[path] as INotebookContent;
+    // Linked, its first save would write over the record it was downloaded from.
+    expect(content.metadata).not.toHaveProperty('oceanum');
+    expect(content.cells[0].metadata).toEqual({});
+    // Nothing reaches Oceanum until the notebook is saved.
+    expect(harness.calls).toEqual([]);
+  });
+
+  it('never overwrites a file already there', async () => {
+    mockPicked.file = {
+      name: 'analysis.ipynb',
+      text: JSON.stringify(notebook())
+    };
+    const harness = activate({ folder: { 'analysis.ipynb': notebook() } });
+
+    await harness.commands.execute(CommandIDs.upload);
+
+    expect(harness.saved).toEqual(['Oceanum/analysis (1).ipynb']);
+  });
+
+  it.each([
+    ['not JSON', 'not json at all'],
+    ['JSON that is not a notebook', JSON.stringify({ cells: [] })],
+    ['an nbformat 3 notebook', JSON.stringify({ ...notebook(), nbformat: 3 })]
+  ])('writes nothing for %s', async (_, text) => {
+    mockPicked.file = { name: 'bad.ipynb', text };
+    const harness = activate();
+
+    await harness.commands.execute(CommandIDs.upload);
+
+    expect(harness.saved).toEqual([]);
+    expect(harness.opened).toEqual([]);
+  });
+
+  it('writes nothing when the picker is cancelled', async () => {
+    const harness = activate();
+
+    await harness.commands.execute(CommandIDs.upload);
+
+    expect(mockPickerCalls.count).toBe(1);
+    expect(harness.saved).toEqual([]);
+  });
+
+  it('asks for sign-in first, and writes nothing when declined', async () => {
+    mockPicked.file = { name: 'a.ipynb', text: JSON.stringify(notebook()) };
+    mockDialog.accept = false;
+    const harness = activate({ user: null });
+
+    await harness.commands.execute(CommandIDs.upload);
+
+    expect(mockPickerCalls.count).toBe(0);
+    expect(harness.saved).toEqual([]);
+    expect(harness.commands.isEnabled(CommandIDs.upload)).toBe(false);
   });
 });

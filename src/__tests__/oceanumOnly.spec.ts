@@ -7,13 +7,16 @@ import {
   FILE_BROWSER_ID,
   hideFileBrowser,
   LOCAL_FILE_COMMANDS,
+  NON_NOTEBOOK_NEW_COMMANDS,
+  OCEANUM_PANEL_ID,
   pruneBeforeEachOpen,
   pruneFileMenu,
   routeSaves
 } from '../share/oceanumOnly';
 
 describe('hideFileBrowser', () => {
-  it('closes the file browser without disposing it, and leaves the rest', () => {
+  /** A left area holding the file browser and the running-sessions panel. */
+  function leftArea(): { left: Panel; browser: Widget; running: Widget } {
     const left = new Panel();
     const browser = new Widget();
     browser.id = FILE_BROWSER_ID;
@@ -21,8 +24,24 @@ describe('hideFileBrowser', () => {
     running.id = 'jp-running-sessions';
     left.addWidget(browser);
     left.addWidget(running);
+    return { left, browser, running };
+  }
 
-    expect(hideFileBrowser({ widgets: () => left.widgets })).toBe(true);
+  function shell(left: Panel) {
+    const activated: string[] = [];
+    return {
+      activated,
+      widgets: () => left.widgets,
+      activateById: (id: string): void => {
+        activated.push(id);
+      }
+    };
+  }
+
+  it('closes the file browser without disposing it, and leaves the rest', () => {
+    const { left, browser, running } = leftArea();
+
+    expect(hideFileBrowser(shell(left))).toBe(true);
 
     expect(left.widgets).toEqual([running]);
     // Other extensions still hold it through IDefaultFileBrowser.
@@ -31,7 +50,30 @@ describe('hideFileBrowser', () => {
 
   it('reports when there is none to hide', () => {
     const left = new Panel();
-    expect(hideFileBrowser({ widgets: () => left.widgets })).toBe(false);
+    expect(hideFileBrowser(shell(left))).toBe(false);
+  });
+
+  it('opens the replacement when the file browser was the open panel', () => {
+    const { left } = leftArea();
+    Widget.attach(left, document.body);
+    const fake = shell(left);
+
+    hideFileBrowser(fake, OCEANUM_PANEL_ID);
+
+    expect(fake.activated).toEqual([OCEANUM_PANEL_ID]);
+    Widget.detach(left);
+  });
+
+  it('leaves a collapsed sidebar collapsed', () => {
+    const { left, browser } = leftArea();
+    Widget.attach(left, document.body);
+    browser.hide();
+    const fake = shell(left);
+
+    hideFileBrowser(fake, OCEANUM_PANEL_ID);
+
+    expect(fake.activated).toEqual([]);
+    Widget.detach(left);
   });
 });
 
@@ -189,5 +231,22 @@ describe('routeSaves', () => {
     second.saveState.emit('failed');
     first.saveState.emit('completed');
     expect(pushed).toEqual([first.panel, second.panel, first.panel]);
+  });
+});
+
+describe('the File > New menu', () => {
+  it('loses the entries for files that are not notebooks', () => {
+    const { menu } = fileMenu([
+      'console:create',
+      'notebook:create-new',
+      ...NON_NOTEBOOK_NEW_COMMANDS
+    ]);
+
+    expect(pruneFileMenu(menu, NON_NOTEBOOK_NEW_COMMANDS)).toBe(2);
+
+    expect(menuCommands(menu)).toEqual([
+      'console:create',
+      'notebook:create-new'
+    ]);
   });
 });

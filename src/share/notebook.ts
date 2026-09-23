@@ -195,15 +195,38 @@ export function buildSpecBody(
  */
 function recordNotebook(record: ISpecRecord): INotebookContent {
   const spec = record.spec;
-  if (
-    !isObject(spec) ||
-    spec.nbformat !== 4 ||
-    !Array.isArray(spec.cells) ||
-    !isObject(spec.metadata)
-  ) {
+  if (!isNotebook(spec)) {
     throw new Error('This Oceanum.io record is not a valid notebook.');
   }
-  return withoutTrust(spec as unknown as INotebookContent);
+  return withoutTrust(spec);
+}
+
+function isNotebook(value: unknown): value is INotebookContent {
+  return (
+    isObject(value) &&
+    value.nbformat === 4 &&
+    Array.isArray(value.cells) &&
+    isObject(value.metadata)
+  );
+}
+
+/**
+ * A notebook uploaded from the user's computer, untrusted and linked to nothing: a file
+ * someone else downloaded from a record must not save over that record, and its outputs
+ * must not run scripts on the origin that holds the Oceanum.io session. Throws if the
+ * text is not an nbformat 4 notebook; the message never quotes the file.
+ */
+export function notebookFromUpload(text: string): INotebookContent {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('The file is not a Jupyter notebook: it is not JSON.');
+  }
+  if (!isNotebook(parsed)) {
+    throw new Error('The file is not a Jupyter notebook in nbformat 4.');
+  }
+  return withoutLink(withoutTrust(parsed));
 }
 
 /**

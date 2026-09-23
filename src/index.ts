@@ -21,6 +21,7 @@ import { ConversationPin } from './conversationPin';
 import { deviceAuthPlugin } from './auth/plugin';
 import { IOceanumAuth } from './auth/tokens';
 import { CommandIDs as ShareCommandIDs, sharePlugin } from './share/plugin';
+import { OCEANUM_PANEL_ID } from './share/oceanumOnly';
 
 import { snapshotFromIpynb, snapshotOf } from './notebookContext';
 import { notebookHost } from './notebookHost';
@@ -171,6 +172,11 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
             console.error('Oceanum: could not open the example.', error);
           });
       },
+      uploadNotebook: () => {
+        app.commands.execute(ShareCommandIDs.upload).catch(error => {
+          console.error('Oceanum: could not upload the notebook.', error);
+        });
+      },
       showExamples: () => showExamplesSetting,
       // Saved as a user setting, so the choice outlasts the page; the settings'
       // `changed` signal brings the new value back to the panel. The registry waits
@@ -185,7 +191,7 @@ export const datamesh_connect_extension: JupyterFrontEndPlugin<void> = {
         });
       }
     });
-    datameshConnectWidget.id = 'datamesh-connect';
+    datameshConnectWidget.id = OCEANUM_PANEL_ID;
     datameshConnectWidget.title.icon = oceanumIcon;
     datameshConnectWidget.title.caption = 'Datamesh Connect';
 
