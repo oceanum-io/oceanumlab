@@ -7,6 +7,7 @@ import {
   FILE_BROWSER_ID,
   hideFileBrowser,
   LOCAL_FILE_COMMANDS,
+  moveToTop,
   NON_NOTEBOOK_NEW_COMMANDS,
   OCEANUM_PANEL_ID,
   pruneBeforeEachOpen,
@@ -248,5 +249,69 @@ describe('the File > New menu', () => {
       'console:create',
       'notebook:create-new'
     ]);
+  });
+});
+
+describe('moveToTop', () => {
+  /** A left area in a saved order, and a shell that re-adds by rank as JupyterLab does. */
+  function sidebar(ids: string[]) {
+    const left = new Panel();
+    for (const id of ids) {
+      const widget = new Widget();
+      widget.id = id;
+      left.addWidget(widget);
+    }
+    Widget.attach(left, document.body);
+    const activated: string[] = [];
+    const added: [string, number][] = [];
+    const shell = {
+      widgets: () => left.widgets,
+      add: (widget: Widget, _: 'left', options: { rank: number }): void => {
+        added.push([widget.id, options.rank]);
+        widget.hide();
+        left.insertWidget(0, widget);
+      },
+      activateById: (id: string): void => {
+        activated.push(id);
+      }
+    };
+    const order = (): string[] => left.widgets.map(widget => widget.id);
+    const get = (id: string): Widget => left.widgets.find(w => w.id === id)!;
+    return { left, shell, activated, added, order, get };
+  }
+
+  it('puts a panel a returning user had last back in front, and reopens it', () => {
+    const bar = sidebar(['jp-running-sessions', OCEANUM_PANEL_ID]);
+    bar.get('jp-running-sessions').hide();
+
+    expect(moveToTop(bar.shell, OCEANUM_PANEL_ID)).toBe(true);
+
+    expect(bar.added).toEqual([[OCEANUM_PANEL_ID, 0]]);
+    expect(bar.order()).toEqual([OCEANUM_PANEL_ID, 'jp-running-sessions']);
+    expect(bar.activated).toEqual([OCEANUM_PANEL_ID]);
+    Widget.detach(bar.left);
+  });
+
+  it('does not open a panel that was closed', () => {
+    const bar = sidebar(['jp-running-sessions', OCEANUM_PANEL_ID]);
+    bar.get(OCEANUM_PANEL_ID).hide();
+
+    moveToTop(bar.shell, OCEANUM_PANEL_ID);
+
+    expect(bar.order()[0]).toBe(OCEANUM_PANEL_ID);
+    expect(bar.activated).toEqual([]);
+    Widget.detach(bar.left);
+  });
+
+  it('leaves the sidebar alone when the panel is already first or absent', () => {
+    const first = sidebar([OCEANUM_PANEL_ID, 'jp-running-sessions']);
+    expect(moveToTop(first.shell, OCEANUM_PANEL_ID)).toBe(false);
+    expect(first.added).toEqual([]);
+    Widget.detach(first.left);
+
+    const absent = sidebar(['jp-running-sessions']);
+    expect(moveToTop(absent.shell, OCEANUM_PANEL_ID)).toBe(false);
+    expect(absent.added).toEqual([]);
+    Widget.detach(absent.left);
   });
 });

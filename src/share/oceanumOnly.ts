@@ -67,6 +67,36 @@ export function hideFileBrowser(
 }
 
 /**
+ * Put a left-sidebar widget first, and keep it open if it was. True if it moved.
+ *
+ * A rank alone is not enough: the layout restorer replays the sidebar order each user
+ * last had, so a returning user would keep the panel wherever it used to be. Adding it
+ * again after the restore re-inserts it by rank, and the shell saves the new order.
+ */
+export function moveToTop(
+  shell: {
+    widgets(area: 'left'): Iterable<Widget>;
+    add(widget: Widget, area: 'left', options: { rank: number }): void;
+    activateById(id: string): void;
+  },
+  id: string
+): boolean {
+  const widgets = Array.from(shell.widgets('left'));
+  const index = widgets.findIndex(widget => widget.id === id);
+  if (index <= 0) {
+    return false;
+  }
+  const widget = widgets[index];
+  // Adding hides the widget, so an open panel has to be opened again.
+  const wasOpen = widget.isVisible;
+  shell.add(widget, 'left', { rank: 0 });
+  if (wasOpen) {
+    shell.activateById(id);
+  }
+  return true;
+}
+
+/**
  * Submenus of local files. "Open Recent" is built by the document manager rather than
  * declared in a schema, and its menu has no id, so it is known by the commands it holds.
  */

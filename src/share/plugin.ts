@@ -43,6 +43,7 @@ import {
 } from './notebook';
 import {
   hideFileBrowser,
+  moveToTop,
   NON_NOTEBOOK_NEW_COMMANDS,
   OCEANUM_PANEL_ID,
   pruneBeforeEachOpen,
@@ -1192,6 +1193,8 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     if (oceanumOnly) {
       void app.restored.then(() => {
         hideFileBrowser(app.shell, OCEANUM_PANEL_ID);
+        // Oceanum is where notebooks live now, so its panel leads the sidebar.
+        moveToTop(app.shell, OCEANUM_PANEL_ID);
         // IFileMenu is the narrow interface; the menu itself is a Lumino Menu, which
         // is what can drop items.
         const fileMenu = mainMenu?.fileMenu;
