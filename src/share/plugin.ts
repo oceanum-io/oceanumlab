@@ -324,6 +324,23 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       return null;
     }
 
+    /** Write a notebook to `path` on the local drive and open it. */
+    async function writeAndOpen(
+      path: string,
+      content: INotebookContent
+    ): Promise<Widget> {
+      await docManager.services.contents.save(path, {
+        type: 'notebook',
+        format: 'json',
+        content
+      });
+      const widget = docManager.openOrReveal(path);
+      if (!widget) {
+        throw new Error(`Could not open ${path}.`);
+      }
+      return widget;
+    }
+
     /** Write a record to the local drive as `Oceanum/<name>.ipynb` and open it. */
     async function openRecord(s: IStore, record: ISpecRecord): Promise<void> {
       // Already open: bring it forward rather than writing a second copy.
@@ -340,14 +357,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       const path =
         (await pathHoldingRecord(s, record, names)) ??
         uniqueNotebookPath(record.name, names);
-      await docManager.services.contents.save(path, {
-        type: 'notebook',
-        format: 'json',
-        content
-      });
-      if (!docManager.openOrReveal(path)) {
-        throw new Error(`Could not open ${path}.`);
-      }
+      await writeAndOpen(path, content);
     }
 
     async function openById(id: string): Promise<void> {
@@ -404,16 +414,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
           title || record.name,
           await oceanumFolderNames()
         );
-        await docManager.services.contents.save(path, {
-          type: 'notebook',
-          format: 'json',
-          content
-        });
-        const widget = docManager.openOrReveal(path);
-        if (!widget) {
-          throw new Error(`Could not open ${path}.`);
-        }
-        exampleCopies.set(id, widget);
+        exampleCopies.set(id, await writeAndOpen(path, content));
       } catch (error) {
         await reportError('Open from Oceanum failed', error);
       } finally {
@@ -442,16 +443,10 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         }
         const content = notebookFromUpload(await file.text());
         const path = uniqueNotebookPath(file.name, await oceanumFolderNames());
-        await docManager.services.contents.save(path, {
-          type: 'notebook',
-          format: 'json',
-          content
-        });
-        if (!docManager.openOrReveal(path)) {
-          throw new Error(`Could not open ${path}.`);
-        }
+        await writeAndOpen(path, content);
+        // Outside Oceanum-only mode a plain Save stays local.
         Notification.info(
-          `Uploaded "${file.name}". Save it to store it on Oceanum.io.`,
+          `Uploaded "${file.name}". ${oceanumOnly ? 'Save it' : 'Use Save to Oceanum'} to store it on Oceanum.io.`,
           { autoClose: 5000 }
         );
       } catch (error) {

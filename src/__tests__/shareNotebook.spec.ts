@@ -608,7 +608,11 @@ describe('notebookFromUpload', () => {
     ['a JSON array', '[]'],
     ['nbformat 3', JSON.stringify({ ...linkedAndTrusted, nbformat: 3 })],
     ['no cells', JSON.stringify({ nbformat: 4, metadata: {} })],
-    ['no metadata', JSON.stringify({ nbformat: 4, cells: [] })]
+    ['no metadata', JSON.stringify({ nbformat: 4, cells: [] })],
+    [
+      'a cell that is not a cell',
+      JSON.stringify({ nbformat: 4, metadata: {}, cells: [null, {}] })
+    ]
   ])('refuses %s, without quoting the file', (_, text) => {
     expect(() => notebookFromUpload(text)).toThrow(/not a Jupyter notebook/);
     try {

@@ -380,7 +380,8 @@ export function StoredNotebooks({
   );
   return (
     <div className="oceanum-notebooks">
-      {onUpload ? (
+      {/* Without a spec store the upload command does nothing. */}
+      {onUpload && auth.urls?.specs ? (
         <div className="oceanum-notebooks-actions">
           <button
             type="button"

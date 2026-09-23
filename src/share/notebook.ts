@@ -206,6 +206,9 @@ function isNotebook(value: unknown): value is INotebookContent {
     isObject(value) &&
     value.nbformat === 4 &&
     Array.isArray(value.cells) &&
+    value.cells.every(
+      cell => isObject(cell) && typeof cell.cell_type === 'string'
+    ) &&
     isObject(value.metadata)
   );
 }
