@@ -33,7 +33,7 @@
     "showExamples": {
       "type": "boolean",
       "title": "Show examples",
-      "description": "List Oceanum's example notebooks in the Notebooks tab, where the site provides them. Also switched from the Examples heading.",
+      "description": "List Oceanum's example notebooks (its Notebook Demo specs) in the Notebooks tab. Also switched from the Examples heading.",
       "default": true
     }
   },

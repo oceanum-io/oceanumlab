@@ -89,9 +89,10 @@ async function loadExamples(
 }
 
 /**
- * The curated examples. Their rows deliberately leave out SPEC_ID_ATTRIBUTE and the
- * stored-notebook row class: the share plugin's row menu (Open, Rename, Share, Delete)
- * is bound to those, and none of it applies to Oceanum's own example records.
+ * The examples: Oceanum's Notebook Demo specs. Their rows deliberately leave out
+ * SPEC_ID_ATTRIBUTE and the stored-notebook row class: the share plugin's row menu
+ * (Open, Rename, Share, Delete) is bound to those, and none of it applies to
+ * Oceanum's own example records.
  */
 function ExampleSections({
   examples,
