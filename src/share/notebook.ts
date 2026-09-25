@@ -352,68 +352,37 @@ export function partitionSummaries(
   };
 }
 
-/** The `kind` of a Notebook Demo record's spec. */
-export const NOTEBOOK_DEMO_KIND = 'notebook-demo';
+/** The spec store type of the Notebook Demo specs, which are the Examples. */
+export const NOTEBOOK_DEMO_TYPE = 'notebook-demo';
 
-/** One example in a Notebook Demo record: a notebook record and how to list it. */
+/** One example: a Notebook Demo spec, whose body is the example notebook. */
 export interface INotebookDemoItem {
   id: string;
   title: string;
   summary?: string;
 }
 
-/** A titled group of examples. */
-export interface INotebookDemoSection {
-  title: string;
-  items: INotebookDemoItem[];
-}
-
-function nonBlank(value: unknown): value is string {
-  return typeof value === 'string' && value.trim() !== '';
-}
-
 /**
- * The sections of a Notebook Demo record's spec, keeping only what can be listed: items
- * with a record id and a title, in sections with a title and at least one such item.
- * A spec of another kind or version gives no sections, with a warning.
+ * The examples in a listing of Notebook Demo specs, ordered by name as people number
+ * them ("2 …" before "10 …").
  */
-export function parseNotebookDemo(spec: unknown): INotebookDemoSection[] {
-  if (
-    !isObject(spec) ||
-    spec.kind !== NOTEBOOK_DEMO_KIND ||
-    spec.version !== 1 ||
-    !Array.isArray(spec.sections)
-  ) {
-    console.warn(
-      'Oceanum: ignoring a Notebook Demo record this version cannot read.'
+export function demoItemsFromSummaries(
+  summaries: readonly ISpecSummary[]
+): INotebookDemoItem[] {
+  // No id check: the client's listing already rejects any summary without a spec id.
+  return summaries
+    .map(summary => {
+      const title = summary.name.trim() || 'Untitled';
+      return summary.description
+        ? { id: summary.id, title, summary: summary.description }
+        : { id: summary.id, title };
+    })
+    .sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      })
     );
-    return [];
-  }
-  const sections: INotebookDemoSection[] = [];
-  for (const section of spec.sections) {
-    if (
-      !isObject(section) ||
-      !nonBlank(section.title) ||
-      !Array.isArray(section.items)
-    ) {
-      continue;
-    }
-    const items: INotebookDemoItem[] = [];
-    for (const item of section.items) {
-      if (!isObject(item) || !isSpecId(item.id) || !nonBlank(item.title)) {
-        continue;
-      }
-      items.push(
-        typeof item.summary === 'string'
-          ? { id: item.id, title: item.title, summary: item.summary }
-          : { id: item.id, title: item.title }
-      );
-    }
-    if (items.length > 0) {
-      sections.push({ title: section.title, items });
-    }
-  }
-  return sections;
 }
 
 /** Parse a spec store timestamp, which is UTC but usually has no zone designator. */

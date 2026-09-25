@@ -86,7 +86,10 @@ describe('the Notebooks tab while signed in', () => {
     const fetches: string[] = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
-      fetches.push(String(input));
+      // Counts the notebook listing only; each load also lists the demos.
+      if (String(input).endsWith('/specs/notebook')) {
+        fetches.push(String(input));
+      }
       return {
         ok: true,
         status: 200,
@@ -130,53 +133,41 @@ describe('the Notebooks tab while signed in', () => {
 
 describe('the Examples in the Notebooks tab', () => {
   const MINE = '6f1c1a52-4b8e-4c0f-9a57-1d2e3f4a5b6c';
-  const PUBLIC_EXAMPLE = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
-  const OTHER_EXAMPLE = '1c2d3e4f-2222-4a2b-8c3d-9e8f7a6b5c4d';
+  const QUERY = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
+  const PLOT = '1c2d3e4f-2222-4a2b-8c3d-9e8f7a6b5c4d';
   const SHARED = '2d3e4f5a-3333-4a2b-8c3d-9e8f7a6b5c4d';
-  const DEMO_ID = '3e4f5a6b-4444-4a2b-8c3d-9e8f7a6b5c4d';
+  const SPECTRA = '3e4f5a6b-4444-4a2b-8c3d-9e8f7a6b5c4d';
 
-  const summary = (id: string, name: string, creator: string | null) => ({
+  const summary = (
+    id: string,
+    name: string,
+    creator: string | null,
+    description: string | null = null
+  ) => ({
     id,
     name,
-    description: null as string | null,
+    description,
     modified: '2026-09-12T10:00:00',
     creator
   });
 
-  // The listing returns a public example as shared with every signed-in user.
+  // The user's notebooks.
   const LISTING = [
     summary(MINE, 'Mine', 'me@example.com'),
-    summary(PUBLIC_EXAMPLE, 'Query (example)', null),
     summary(SHARED, 'Shared', null)
   ];
 
-  const DEMO = {
-    ...summary(DEMO_ID, 'Notebook Demo', null),
-    spec: {
-      kind: 'notebook-demo',
-      version: 1,
-      sections: [
-        {
-          title: 'Getting started',
-          items: [
-            {
-              id: PUBLIC_EXAMPLE,
-              title: 'Query a datasource',
-              summary: 'One line'
-            },
-            { id: OTHER_EXAMPLE, title: 'Plot waves' }
-          ]
-        },
-        // A curator's own example is also theirs: it stays in My notebooks.
-        { title: 'Advanced', items: [{ id: MINE, title: 'Spectra' }] }
-      ]
-    }
-  };
+  // The Notebook Demo specs, each one an example notebook, in no particular order.
+  const DEMOS = [
+    summary(PLOT, '10 Plot waves', null),
+    summary(SPECTRA, 'Spectra', null),
+    summary(QUERY, '2 Query a datasource', null, 'One line')
+  ];
 
   const ok = (data: unknown): Response =>
     ({ ok: true, status: 200, json: async () => data }) as unknown as Response;
 
-  function signedIn(notebookDemo?: string): IOceanumAuth {
+  function signedIn(): IOceanumAuth {
     const auth = signedOut();
     (auth as { user: IOceanumUser | null }).user = {
       sub: 'auth0|1',
@@ -186,20 +177,19 @@ describe('the Examples in the Notebooks tab', () => {
       colorScheme: null
     };
     auth.getAccessToken = async () => 'tok';
-    (auth as { environment: unknown }).environment = notebookDemo
-      ? { notebookDemo }
-      : {};
+    (auth as { environment: unknown }).environment = {};
     return auth;
   }
 
   const originalFetch = globalThis.fetch;
   let fetches: string[];
-  function stubFetch(demo: () => Response = () => ok(DEMO)): void {
+  const DEMO_LISTING = 'https://specs.example.com/specs/notebook-demo';
+  function stubFetch(demos: () => Response = () => ok(DEMOS)): void {
     fetches = [];
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       fetches.push(url);
-      return url.includes('/specs/notebook-demo/') ? demo() : ok(LISTING);
+      return url === DEMO_LISTING ? demos() : ok(LISTING);
     }) as typeof fetch;
   }
   afterEach(() => {
@@ -268,73 +258,83 @@ describe('the Examples in the Notebooks tab', () => {
     Widget.detach(widget);
   });
 
-  it('lists the record’s examples in order, under their section titles', async () => {
+  it('lists every Notebook Demo spec as an example, ordered by name', async () => {
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID));
+    const widget = await render(signedIn());
 
     const examples = section(widget, 'Examples')!;
     expect(examples).not.toBeNull();
-    expect(
-      Array.from(
-        examples.querySelectorAll('.oceanum-notebooks-subheading'),
-        node => node.textContent
-      )
-    ).toEqual(['Getting started', 'Advanced']);
     const rows = Array.from(
       examples.querySelectorAll<HTMLElement>('[data-example-id]')
     );
+    // Numbered as people number them: 2 before 10.
     expect(rows.map(row => row.textContent)).toEqual([
-      'Query a datasource',
-      'Plot waves',
+      '2 Query a datasource',
+      '10 Plot waves',
       'Spectra'
     ]);
     expect(rows.map(row => row.getAttribute('data-example-id'))).toEqual([
-      PUBLIC_EXAMPLE,
-      OTHER_EXAMPLE,
-      MINE
+      QUERY,
+      PLOT,
+      SPECTRA
     ]);
     expect(rows[0].getAttribute('title')).toBe('One line');
     expect(
       examples.querySelector('.oceanum-notebooks-count')?.textContent
     ).toBe('3');
-    expect(fetches).toContain(
-      `https://specs.example.com/specs/notebook-demo/${DEMO_ID}`
-    );
+    expect(fetches).toContain(DEMO_LISTING);
     widget.dispose();
   });
 
-  it('moves examples out of Shared with me, but leaves My notebooks alone', async () => {
+  it('leaves My notebooks and Shared with me as listed', async () => {
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID));
+    const widget = await render(signedIn());
 
+    expect(idsIn(section(widget, 'My notebooks'), 'data-spec-id')).toEqual([
+      MINE
+    ]);
     expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
       SHARED
     ]);
+    widget.dispose();
+  });
+
+  it('shows no Examples section when there are no demos', async () => {
+    stubFetch(() => ok([]));
+    const widget = await render(signedIn());
+
+    expect(section(widget, 'Examples')).toBeNull();
+    widget.dispose();
+  });
+
+  it('shows no Examples, and no error, where the store has no Notebook Demo type', async () => {
+    stubFetch(
+      () => ({ ok: false, status: 404, json: async () => ({}) }) as Response
+    );
+    const widget = await render(signedIn());
+
+    expect(section(widget, 'Examples')).toBeNull();
     expect(idsIn(section(widget, 'My notebooks'), 'data-spec-id')).toEqual([
       MINE
     ]);
     widget.dispose();
   });
 
-  it('asks for nothing more and shows no Examples where none is configured', async () => {
+  it('asks for no demos while signed out', async () => {
     stubFetch();
-    const widget = await render(signedIn());
+    const widget = new Harness(signedOut());
+    Widget.attach(widget, document.body);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    expect(section(widget, 'Examples')).toBeNull();
-    expect(fetches).toEqual(['https://specs.example.com/specs/notebook']);
-    // Without a record, a public example is just another shared notebook.
-    expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
-      PUBLIC_EXAMPLE,
-      SHARED
-    ]);
+    expect(fetches).toEqual([]);
     widget.dispose();
   });
 
-  it('says so when the record cannot be read, and still lists the rest', async () => {
+  it('says so when the demos cannot be listed, and still lists the rest', async () => {
     stubFetch(
-      () => ({ ok: false, status: 404, json: async () => ({}) }) as Response
+      () => ({ ok: false, status: 500, json: async () => ({}) }) as Response
     );
-    const widget = await render(signedIn(DEMO_ID));
+    const widget = await render(signedIn());
 
     const examples = section(widget, 'Examples')!;
     expect(
@@ -345,7 +345,6 @@ describe('the Examples in the Notebooks tab', () => {
       MINE
     ]);
     expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
-      PUBLIC_EXAMPLE,
       SHARED
     ]);
     widget.dispose();
@@ -354,7 +353,7 @@ describe('the Examples in the Notebooks tab', () => {
   it('keeps example rows out of the stored-notebook row menu', async () => {
     // Its Rename and Delete would act on Oceanum's own example records.
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID), () => undefined);
+    const widget = await render(signedIn(), () => undefined);
 
     const rows = section(widget, 'Examples')!.querySelectorAll('button');
     expect(rows).toHaveLength(3);
@@ -367,13 +366,13 @@ describe('the Examples in the Notebooks tab', () => {
   it('opens an example through onOpenExample, with its title', async () => {
     stubFetch();
     const opened: INotebookDemoItem[] = [];
-    const widget = await render(signedIn(DEMO_ID), item => opened.push(item));
+    const widget = await render(signedIn(), item => opened.push(item));
 
     section(widget, 'Examples')!
-      .querySelector<HTMLButtonElement>(`[data-example-id="${OTHER_EXAMPLE}"]`)!
+      .querySelector<HTMLButtonElement>(`[data-example-id="${PLOT}"]`)!
       .click();
 
-    expect(opened).toEqual([{ id: OTHER_EXAMPLE, title: 'Plot waves' }]);
+    expect(opened).toEqual([{ id: PLOT, title: '10 Plot waves' }]);
     widget.dispose();
   });
 
@@ -385,7 +384,7 @@ describe('the Examples in the Notebooks tab', () => {
   it('puts a switch on the Examples heading that asks to hide them', async () => {
     stubFetch();
     const changes: boolean[] = [];
-    const widget = await render(signedIn(DEMO_ID), undefined, {
+    const widget = await render(signedIn(), undefined, {
       showExamples: true,
       onShowExamplesChange: show => changes.push(show)
     });
@@ -408,7 +407,7 @@ describe('the Examples in the Notebooks tab', () => {
   it('keeps hidden examples folded under their heading, with the switch to bring them back', async () => {
     stubFetch();
     const changes: boolean[] = [];
-    const widget = await render(signedIn(DEMO_ID), undefined, {
+    const widget = await render(signedIn(), undefined, {
       showExamples: false,
       onShowExamplesChange: show => changes.push(show)
     });
@@ -418,14 +417,8 @@ describe('the Examples in the Notebooks tab', () => {
     expect(
       examples.querySelector('.oceanum-notebooks-count')?.textContent
     ).toBe('3');
-    // Hidden, not forgotten: the record is still read, and its examples stay out of
-    // Shared with me.
-    expect(fetches).toContain(
-      `https://specs.example.com/specs/notebook-demo/${DEMO_ID}`
-    );
-    expect(idsIn(section(widget, 'Shared with me'), 'data-spec-id')).toEqual([
-      SHARED
-    ]);
+    // Hidden, not forgotten: the demos are still listed, for the count.
+    expect(fetches).toContain(DEMO_LISTING);
 
     const toggle = switchIn(widget)!;
     expect(toggle.getAttribute('aria-checked')).toBe('false');
@@ -437,9 +430,9 @@ describe('the Examples in the Notebooks tab', () => {
 
   it('shows no error for examples the user has hidden', async () => {
     stubFetch(
-      () => ({ ok: false, status: 404, json: async () => ({}) }) as Response
+      () => ({ ok: false, status: 500, json: async () => ({}) }) as Response
     );
-    const widget = await render(signedIn(DEMO_ID), undefined, {
+    const widget = await render(signedIn(), undefined, {
       showExamples: false,
       onShowExamplesChange: () => undefined
     });
@@ -452,7 +445,7 @@ describe('the Examples in the Notebooks tab', () => {
 
   it('offers no switch where the choice could not be kept', async () => {
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID));
+    const widget = await render(signedIn());
 
     expect(switchIn(widget)).toBeNull();
     expect(
@@ -464,7 +457,7 @@ describe('the Examples in the Notebooks tab', () => {
   it('shows no examples while the setting is still loading', async () => {
     // Otherwise examples a user has hidden would show for a moment on every reload.
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID), undefined, {
+    const widget = await render(signedIn(), undefined, {
       showExamples: null,
       onShowExamplesChange: () => undefined
     });
@@ -479,7 +472,7 @@ describe('the Examples in the Notebooks tab', () => {
 
   it('shows nothing for hidden examples that no switch could bring back', async () => {
     stubFetch();
-    const widget = await render(signedIn(DEMO_ID), undefined, {
+    const widget = await render(signedIn(), undefined, {
       showExamples: false
     });
 

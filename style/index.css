@@ -717,13 +717,6 @@
   }
 }
 
-/* A group within Examples: quieter than the tab's section headings. */
-.oceanum-notebooks-subheading {
-  padding: 4px 8px 0;
-  color: var(--jp-ui-font-color2);
-  font-size: var(--jp-ui-font-size0);
-}
-
 .oceanum-notebooks-name {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -31,6 +31,7 @@ import {
   notebookFromRecord,
   notebookFromUpload,
   notebookNamesFor,
+  NOTEBOOK_DEMO_TYPE,
   OCEANUM_DIR,
   partitionSummaries,
   QUERY_PARAM,
@@ -75,6 +76,8 @@ const UNAVAILABLE =
 interface IStore {
   specsUrl: string;
   client: SpecStoreClient;
+  /** The Notebook Demo specs, which are the Examples. */
+  demos: SpecStoreClient;
 }
 
 /**
@@ -110,6 +113,11 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
             client: new SpecStoreClient({
               specsUrl,
               getAccessToken: () => auth.getAccessToken()
+            }),
+            demos: new SpecStoreClient({
+              specsUrl,
+              getAccessToken: () => auth.getAccessToken(),
+              specType: NOTEBOOK_DEMO_TYPE
             })
           };
     const oceanumOnly =
@@ -409,7 +417,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       }
       openingExamples.add(id);
       try {
-        const record = await store.client.get(id);
+        const record = await store.demos.get(id);
         const content = unlinkedNotebookFromRecord(record);
         const path = uniqueNotebookPath(
           title || record.name,
