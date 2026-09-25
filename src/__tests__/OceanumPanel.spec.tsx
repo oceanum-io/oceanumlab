@@ -160,7 +160,6 @@ describe('the Oceanum panel', () => {
 });
 
 describe('the Examples switch in the Oceanum panel', () => {
-  const DEMO_ID = '3e4f5a6b-4444-4a2b-8c3d-9e8f7a6b5c4d';
   const EXAMPLE = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
   const originalFetch = globalThis.fetch;
   afterEach(() => {
@@ -179,27 +178,23 @@ describe('the Examples switch in the Oceanum panel', () => {
 
   it('saves the choice, and follows the setting once it has changed', async () => {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const demo = String(input).includes('/specs/notebook-demo/');
-      const data: unknown = demo
-        ? {
-            id: DEMO_ID,
-            name: 'Notebook Demo',
-            description: null as string | null,
-            modified: '2026-09-22T10:00:00',
-            creator: null as string | null,
-            spec: {
-              kind: 'notebook-demo',
-              version: 1,
-              sections: [
-                { title: 'Start', items: [{ id: EXAMPLE, title: 'Query' }] }
-              ]
+      // The Notebook Demo listing has one example; the user has no notebooks.
+      const demos = String(input).endsWith('/specs/notebook-demo');
+      const data: unknown = demos
+        ? [
+            {
+              id: EXAMPLE,
+              name: 'Query',
+              description: null as string | null,
+              modified: '2026-09-22T10:00:00',
+              creator: null as string | null
             }
-          }
+          ]
         : [];
       return { ok: true, status: 200, json: async () => data } as Response;
     }) as typeof fetch;
     const auth = {
-      environment: { notebookDemo: DEMO_ID },
+      environment: {},
       urls: { specs: 'https://specs.example.com' },
       ready: Promise.resolve(),
       user: {

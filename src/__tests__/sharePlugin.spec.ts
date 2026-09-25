@@ -100,6 +100,7 @@ const record = (id: string, name: string): ISpecRecord => ({
  */
 function store(stored: Record<string, INotebookContent> = {}) {
   const calls: string[] = [];
+  const urls: string[] = [];
   const bodies: Record<string, unknown>[] = [];
   const names: Record<string, string> = { [ID_A]: 'Alpha', [ID_B]: 'Beta' };
   const fetcher = async (
@@ -110,6 +111,7 @@ function store(stored: Record<string, INotebookContent> = {}) {
     const method = init?.method ?? 'GET';
     const id = url.split('/').pop() ?? '';
     calls.push(`${method} ${id}`);
+    urls.push(url);
     if (init?.body) {
       bodies.push(JSON.parse(String(init.body)));
     }
@@ -125,7 +127,7 @@ function store(stored: Record<string, INotebookContent> = {}) {
             }
     } as unknown as Response;
   };
-  return { calls, bodies, fetcher };
+  return { calls, urls, bodies, fetcher };
 }
 
 /** A notebook panel with just the surface the plugin touches. */
@@ -159,6 +161,8 @@ function panel(id: string, path: string, link?: string): NotebookPanel {
 interface IHarness {
   commands: CommandRegistry;
   calls: string[];
+  /** Every URL the plugin fetched, in order. */
+  urls: string[];
   bodies: Record<string, unknown>[];
   saved: string[];
   /** What each save wrote, by path. */
@@ -183,7 +187,7 @@ function activate(
   } = {}
 ): IHarness {
   const commands = new CommandRegistry();
-  const { calls, bodies, fetcher } = store(options.stored);
+  const { calls, urls, bodies, fetcher } = store(options.stored);
   const saved: string[] = [];
   const written: Record<string, unknown> = {};
   const opened: string[] = [];
@@ -303,6 +307,7 @@ function activate(
   return {
     commands,
     calls,
+    urls,
     bodies,
     saved,
     written,
@@ -493,6 +498,8 @@ describe('opening an example', () => {
 
     // Read, never written back: the example's record is Oceanum's.
     expect(harness.calls).toEqual([`GET ${ID_A}`]);
+    // An example is a Notebook Demo spec, not a notebook.
+    expect(harness.urls).toEqual([`${SPECS}/specs/notebook-demo/${ID_A}`]);
     const path = 'Oceanum/Query a datasource.ipynb';
     expect(harness.saved).toEqual([path]);
     expect(harness.opened).toEqual([path]);

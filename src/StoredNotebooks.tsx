@@ -4,10 +4,9 @@ import { IOceanumAuth } from './auth/tokens';
 import { SpecStoreClient } from './share/client';
 import { notebooksChanged } from './share/events';
 import {
+  demoItemsFromSummaries,
   INotebookDemoItem,
-  INotebookDemoSection,
   ISpecSummary,
-  parseNotebookDemo,
   partitionSummaries
 } from './share/notebook';
 import { SPEC_ID_ATTRIBUTE } from './share/plugin';
@@ -45,11 +44,11 @@ export interface IStoredNotebooksProps {
   onSignIn?: () => void;
 }
 
-/** The deployment's Notebook Demo record, which lists the Examples. */
+/** The Notebook Demo specs the user can read, which are the Examples. */
 type Examples =
   | { state: 'none' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; sections: INotebookDemoSection[] };
+  | { state: 'ready'; items: INotebookDemoItem[] };
 
 type Load =
   | { state: 'loading' }
@@ -57,25 +56,24 @@ type Load =
   | { state: 'ready'; items: ISpecSummary[]; examples: Examples };
 
 /**
- * Read the Notebook Demo record, if the deployment names one. Never rejects: a failure
- * here is shown in the Examples section and leaves the rest of the tab alone.
+ * List the Notebook Demo specs, each one an example notebook. Only org oceanum may
+ * create them (spec store 0.6.2), so every one listed is Oceanum's. Never rejects: a
+ * failure here is shown in the Examples section and leaves the rest of the tab alone.
  */
 async function loadExamples(
   auth: IOceanumAuth,
-  specsUrl: string,
-  id: string | null
+  specsUrl: string
 ): Promise<Examples> {
-  if (!id) {
-    return { state: 'none' };
-  }
   try {
     const client = new SpecStoreClient({
       specsUrl,
       getAccessToken: () => auth.getAccessToken(),
       specType: 'notebook-demo'
     });
-    const record = await client.get(id);
-    return { state: 'ready', sections: parseNotebookDemo(record.spec) };
+    return {
+      state: 'ready',
+      items: demoItemsFromSummaries(await client.list())
+    };
   } catch (error) {
     return {
       state: 'error',
@@ -105,13 +103,7 @@ function ExampleSections({
   if (examples.state === 'none' || show === null || (!show && !onShowChange)) {
     return null;
   }
-  const count =
-    examples.state === 'ready'
-      ? examples.sections.reduce(
-          (total, section) => total + section.items.length,
-          0
-        )
-      : null;
+  const count = examples.state === 'ready' ? examples.items.length : null;
   if (count === 0) {
     return null;
   }
@@ -155,45 +147,39 @@ function ExampleSections({
   return (
     <div className="oceanum-notebooks-section">
       {heading}
-      {examples.sections.map((section, index) => (
-        <div key={index}>
-          {/* Titles come from the record: React escapes them, never set as HTML. */}
-          <div className="oceanum-notebooks-subheading">{section.title}</div>
-          <ul className="oceanum-notebooks-list">
-            {section.items.map((item, position) => {
-              const attributes = {
-                [EXAMPLE_ID_ATTRIBUTE]: item.id,
-                title: item.summary
-              };
-              const name = (
-                <span className="oceanum-notebooks-name">{item.title}</span>
-              );
-              return (
-                // A record may list the same example twice; the id alone is no key.
-                <li key={`${position}:${item.id}`}>
-                  {onOpen ? (
-                    <button
-                      type="button"
-                      className="oceanum-notebooks-example"
-                      onClick={() => onOpen(item)}
-                      {...attributes}
-                    >
-                      {name}
-                    </button>
-                  ) : (
-                    <div
-                      className="oceanum-notebooks-example oceanum-notebooks-item-static"
-                      {...attributes}
-                    >
-                      {name}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+      <ul className="oceanum-notebooks-list">
+        {examples.items.map(item => {
+          const attributes = {
+            [EXAMPLE_ID_ATTRIBUTE]: item.id,
+            title: item.summary
+          };
+          // Names come from the spec store: React escapes them, never set as HTML.
+          const name = (
+            <span className="oceanum-notebooks-name">{item.title}</span>
+          );
+          return (
+            <li key={item.id}>
+              {onOpen ? (
+                <button
+                  type="button"
+                  className="oceanum-notebooks-example"
+                  onClick={() => onOpen(item)}
+                  {...attributes}
+                >
+                  {name}
+                </button>
+              ) : (
+                <div
+                  className="oceanum-notebooks-example oceanum-notebooks-item-static"
+                  {...attributes}
+                >
+                  {name}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -302,11 +288,9 @@ export function StoredNotebooks({
           specsUrl: specs,
           getAccessToken: () => auth.getAccessToken()
         });
-        // Only the record the deployment names: every signed-in user can create
-        // notebook-demo records, so the examples never come from a listing.
         const [items, examples] = await Promise.all([
           client.list(),
-          loadExamples(auth, specs, auth.environment?.notebookDemo ?? null)
+          loadExamples(auth, specs)
         ]);
         if (!cancelled) {
           setLoad({ state: 'ready', items, examples });
@@ -369,15 +353,6 @@ export function StoredNotebooks({
   }
 
   const { mine, shared } = partitionSummaries(load.items, user.email);
-  // A public example is readable by everyone, so the listing returns it as shared with
-  // every signed-in user; it is shown under Examples instead.
-  const exampleIds = new Set(
-    load.examples.state === 'ready'
-      ? load.examples.sections.flatMap(section =>
-          section.items.map(item => item.id)
-        )
-      : []
-  );
   return (
     <div className="oceanum-notebooks">
       {/* Without a spec store the upload command does nothing. */}
@@ -401,7 +376,7 @@ export function StoredNotebooks({
       />
       <Section
         title="Shared with me"
-        items={shared.filter(item => !exampleIds.has(item.id))}
+        items={shared}
         empty="No notebooks have been shared with you."
         onOpen={onOpen}
       />

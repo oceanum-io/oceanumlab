@@ -2,12 +2,12 @@ import type { INotebookContent } from '@jupyterlab/nbformat';
 
 import {
   buildSpecBody,
+  demoItemsFromSummaries,
   isShareableEmail,
   isSpecId,
   nameFromPath,
   notebookFromRecord,
   notebookFromUpload,
-  parseNotebookDemo,
   parseShareEmails,
   parseTimestamp,
   partitionSummaries,
@@ -219,98 +219,47 @@ describe('unlinkedNotebookFromRecord', () => {
   });
 });
 
-describe('parseNotebookDemo', () => {
-  const OTHER = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
-  const demo = (sections: unknown, extra: object = {}): unknown => ({
-    kind: 'notebook-demo',
-    version: 1,
-    sections,
-    ...extra
+describe('demoItemsFromSummaries', () => {
+  const A = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
+  const B = '1c2d3e4f-2222-4a2b-8c3d-9e8f7a6b5c4d';
+  const C = '2d3e4f5a-3333-4a2b-8c3d-9e8f7a6b5c4d';
+  const summary = (id: string, name: string, description: string | null) => ({
+    id,
+    name,
+    description,
+    modified: '2026-09-25T10:00:00',
+    creator: null as string | null
   });
 
-  let warn: jest.SpyInstance;
-  beforeEach(() => {
-    warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-  });
-  afterEach(() => {
-    warn.mockRestore();
+  it('lists each spec by name, with its description as the summary', () => {
+    expect(
+      demoItemsFromSummaries([summary(A, '01_quickstart', 'A quick query')])
+    ).toEqual([{ id: A, title: '01_quickstart', summary: 'A quick query' }]);
   });
 
-  it('keeps sections and items in record order', () => {
-    const sections = parseNotebookDemo(
-      demo(
-        [
-          {
-            title: 'Getting started',
-            items: [
-              { id: ID, title: 'Query', summary: 'One line' },
-              { id: OTHER, title: 'Plot', note: 'ignored' }
-            ]
-          },
-          { title: 'Waves', items: [{ id: OTHER, title: 'Spectra' }] }
-        ],
-        { owner: 'ignored' }
-      )
-    );
-    expect(sections).toEqual([
-      {
-        title: 'Getting started',
-        items: [
-          { id: ID, title: 'Query', summary: 'One line' },
-          { id: OTHER, title: 'Plot' }
-        ]
-      },
-      { title: 'Waves', items: [{ id: OTHER, title: 'Spectra' }] }
+  it('orders by name as people number them, ignoring case', () => {
+    const items = demoItemsFromSummaries([
+      summary(A, '10 Plot waves', null),
+      summary(B, 'spectra', null),
+      summary(C, '2 Query', null)
     ]);
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('skips items without a record id or a title', () => {
-    const sections = parseNotebookDemo(
-      demo([
-        {
-          title: 'Mixed',
-          items: [
-            { id: '../eidos', title: 'Not a record id' },
-            { id: ID, title: '   ' },
-            { id: ID },
-            'not an item',
-            { id: OTHER, title: 'Kept', summary: 42 }
-          ]
-        }
-      ])
-    );
-    expect(sections).toEqual([
-      { title: 'Mixed', items: [{ id: OTHER, title: 'Kept' }] }
+    expect(items.map(item => item.title)).toEqual([
+      '2 Query',
+      '10 Plot waves',
+      'spectra'
     ]);
   });
 
-  it('drops sections with no title or nothing left to list', () => {
-    const sections = parseNotebookDemo(
-      demo([
-        { title: 'Empty', items: [] },
-        { title: 'All invalid', items: [{ id: 'x', title: 'y' }] },
-        { title: '', items: [{ id: ID, title: 'Untitled section' }] },
-        { title: 'No items' }
-      ])
-    );
-    expect(sections).toEqual([]);
-    expect(warn).not.toHaveBeenCalled();
+  it('names an unnamed spec, and leaves out a summary it does not have', () => {
+    expect(demoItemsFromSummaries([summary(A, '  ', null)])).toEqual([
+      { id: A, title: 'Untitled' }
+    ]);
   });
 
-  it('reads nothing from a record of another kind or version, and says so once', () => {
-    for (const spec of [
-      demo([], { kind: 'workspace' }),
-      demo([], { version: 2 }),
-      { kind: 'notebook-demo', version: 1, sections: {} },
-      null,
-      [],
-      'notebook-demo'
-    ]) {
-      warn.mockClear();
-      expect(parseNotebookDemo(spec)).toEqual([]);
-      expect(warn).toHaveBeenCalledTimes(1);
-    }
+  it('skips an id that is not a spec store id', () => {
+    expect(
+      demoItemsFromSummaries([summary('../notebook', 'Odd', null)])
+    ).toEqual([]);
   });
 });
 
