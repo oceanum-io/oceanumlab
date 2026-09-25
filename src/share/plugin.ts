@@ -31,6 +31,7 @@ import {
   notebookFromRecord,
   notebookFromUpload,
   notebookNamesFor,
+  NOTEBOOK_DEMO_TYPE,
   OCEANUM_DIR,
   partitionSummaries,
   QUERY_PARAM,
@@ -116,7 +117,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
             demos: new SpecStoreClient({
               specsUrl,
               getAccessToken: () => auth.getAccessToken(),
-              specType: 'notebook-demo'
+              specType: NOTEBOOK_DEMO_TYPE
             })
           };
     const oceanumOnly =

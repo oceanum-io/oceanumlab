@@ -255,12 +255,6 @@ describe('demoItemsFromSummaries', () => {
       { id: A, title: 'Untitled' }
     ]);
   });
-
-  it('skips an id that is not a spec store id', () => {
-    expect(
-      demoItemsFromSummaries([summary('../notebook', 'Odd', null)])
-    ).toEqual([]);
-  });
 });
 
 describe('names and paths', () => {

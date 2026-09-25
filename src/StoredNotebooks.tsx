@@ -1,12 +1,13 @@
 import * as React from 'react';
 
 import { IOceanumAuth } from './auth/tokens';
-import { SpecStoreClient } from './share/client';
+import { SpecStoreClient, SpecStoreError } from './share/client';
 import { notebooksChanged } from './share/events';
 import {
   demoItemsFromSummaries,
   INotebookDemoItem,
   ISpecSummary,
+  NOTEBOOK_DEMO_TYPE,
   partitionSummaries
 } from './share/notebook';
 import { SPEC_ID_ATTRIBUTE } from './share/plugin';
@@ -68,13 +69,17 @@ async function loadExamples(
     const client = new SpecStoreClient({
       specsUrl,
       getAccessToken: () => auth.getAccessToken(),
-      specType: 'notebook-demo'
+      specType: NOTEBOOK_DEMO_TYPE
     });
     return {
       state: 'ready',
       items: demoItemsFromSummaries(await client.list())
     };
   } catch (error) {
+    // A store with no Notebook Demo type has no examples, which is not an error.
+    if (error instanceof SpecStoreError && error.kind === 'not-found') {
+      return { state: 'none' };
+    }
     return {
       state: 'error',
       message:

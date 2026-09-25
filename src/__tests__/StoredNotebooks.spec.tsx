@@ -307,6 +307,19 @@ describe('the Examples in the Notebooks tab', () => {
     widget.dispose();
   });
 
+  it('shows no Examples, and no error, where the store has no Notebook Demo type', async () => {
+    stubFetch(
+      () => ({ ok: false, status: 404, json: async () => ({}) }) as Response
+    );
+    const widget = await render(signedIn());
+
+    expect(section(widget, 'Examples')).toBeNull();
+    expect(idsIn(section(widget, 'My notebooks'), 'data-spec-id')).toEqual([
+      MINE
+    ]);
+    widget.dispose();
+  });
+
   it('asks for no demos while signed out', async () => {
     stubFetch();
     const widget = new Harness(signedOut());

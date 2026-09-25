@@ -352,6 +352,9 @@ export function partitionSummaries(
   };
 }
 
+/** The spec store type of the Notebook Demo specs, which are the Examples. */
+export const NOTEBOOK_DEMO_TYPE = 'notebook-demo';
+
 /** One example: a Notebook Demo spec, whose body is the example notebook. */
 export interface INotebookDemoItem {
   id: string;
@@ -366,8 +369,8 @@ export interface INotebookDemoItem {
 export function demoItemsFromSummaries(
   summaries: readonly ISpecSummary[]
 ): INotebookDemoItem[] {
+  // No id check: the client's listing already rejects any summary without a spec id.
   return summaries
-    .filter(summary => isSpecId(summary.id))
     .map(summary => {
       const title = summary.name.trim() || 'Untitled';
       return summary.description
