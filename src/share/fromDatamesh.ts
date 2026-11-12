@@ -362,15 +362,17 @@ function commentText(text: string): string {
 
 /**
  * Text safe to put in a Markdown heading: no HTML, no Markdown syntax, and no
- * autolink (`:`, `/`, `.` and `@` are escaped too). `&`, `<` and `>` become
- * entities; every other ASCII punctuation character is backslash-escaped.
+ * autolink (`:`, `/` and `.` are escaped too). `&`, `<` and `>` become entities;
+ * every other ASCII punctuation character is backslash-escaped except `;` (part
+ * of the entities) and `@`: JupyterLab's math handling keeps `@@0@@` as a
+ * placeholder, and an escaped `\@\@0\@\@` slips past it and breaks rendering.
  */
 function markdownText(text: string): string {
   return commentText(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/([!-%'-/:<-@[-`{-~])/g, '\\$1');
+    .replace(/([!-%'-/:=?[-`{-~])/g, '\\$1');
 }
 
 /** The OceanQL query to send: only fields oceanum-python's `Query` accepts. */

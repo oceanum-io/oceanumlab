@@ -143,8 +143,10 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     // A workspace sent by the Datamesh UI's "Open in notebook". Read it now, before
     // anything can rewrite the address. It stays in the address until the notebook
-    // is written (see openFromDatamesh): a sign-in redirect before then returns to
-    // the address it left, and so still carries the workspace.
+    // is written (see openFromDatamesh), so nothing is lost if the page is left
+    // before then. Not handled: a full-page sign-in redirect (signInRedirect) puts
+    // the hash back only after this plugin has activated, so the workspace opens
+    // on the next load rather than this one.
     const datameshPayload = payloadFromHash(window.location.hash);
     /** Remove the payload from the address, so a reload does not open a copy. */
     const clearDatameshPayload = (): void => {

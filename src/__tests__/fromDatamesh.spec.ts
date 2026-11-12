@@ -15,6 +15,7 @@ import {
   queryCellSource,
   queryFields
 } from '../share/fromDatamesh';
+import { removeMath, replaceMath } from '@jupyterlab/rendermime/lib/latex';
 import { marked } from 'marked';
 
 const QUERY = {
@@ -245,10 +246,15 @@ describe('the Markdown heading, rendered as JupyterLab renders it', () => {
     'me@evil.example',
     '<img src=x onerror=alert(1)>',
     '[x](javascript:alert(1))',
-    '`code` **bold** _em_ ~~s~~'
+    '`code` **bold** _em_ ~~s~~',
+    '@@0@@',
+    'run @@12@@ of 20',
+    'Cost $5 and $6'
   ])('%s renders as plain text', async name => {
     const nb = notebookFromDatamesh(request([QUERY], name));
-    const html = await marked.parse(String(nb.cells[0].source), { gfm: true });
+    // JupyterLab's own Markdown path: math placeholders, marked, math restored.
+    const { text, math } = removeMath(String(nb.cells[0].source));
+    const html = replaceMath(await marked.parse(text, { gfm: true }), math);
     const heading = html.split('\n')[0];
     expect(heading).toMatch(/^<h1>[^<]*<\/h1>$/);
   });
