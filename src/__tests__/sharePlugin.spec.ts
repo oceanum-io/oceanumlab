@@ -14,6 +14,7 @@ import { Signal } from '@lumino/signaling';
 
 import type { IOceanumAuth, IOceanumUser } from '../auth/tokens';
 import type { ISpecRecord } from '../share/notebook';
+import { encodePayload, FRAGMENT_KEY } from '../share/fromDatamesh';
 import { CommandIDs, sharePlugin } from '../share/plugin';
 
 /** What every dialog answers. Accepting with no value is "chose nothing". */
@@ -667,5 +668,52 @@ describe('uploading a notebook', () => {
     expect(mockPickerCalls.count).toBe(0);
     expect(harness.saved).toEqual([]);
     expect(harness.commands.isEnabled(CommandIDs.upload)).toBe(false);
+  });
+});
+
+describe('opening a Datamesh UI workspace from the address', () => {
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+  const payload = encodePayload({
+    v: 1,
+    name: 'Coast',
+    items: [{ datasource: 'era5_wind10m', variables: ['u10'] }]
+  });
+
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('writes a new untrusted notebook to the Oceanum folder, opens it and clears the hash', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/lab/#other=1&${FRAGMENT_KEY}=${payload}`
+    );
+    const harness = activate({ user: null, folder: { 'Coast.ipynb': {} } });
+    // Read at activation but left in the address until the notebook is written,
+    // so a sign-in redirect before then still carries it.
+    expect(window.location.hash).toContain(FRAGMENT_KEY);
+    await settle();
+    expect(window.location.hash).toBe('#other=1');
+
+    const path = 'Oceanum/Coast (1).ipynb';
+    expect(harness.saved).toEqual([path]);
+    expect(harness.opened).toEqual([path]);
+    const content = harness.written[path] as INotebookContent;
+    expect(content.metadata).not.toHaveProperty('oceanum');
+    expect(content.cells[2].source).toContain('datamesh.query(');
+    expect(harness.calls).toEqual([]);
+  });
+
+  it('writes nothing for a payload that is not valid', async () => {
+    window.history.replaceState(null, '', `/lab/#${FRAGMENT_KEY}=bad`);
+    const harness = activate();
+    await settle();
+    expect(window.location.hash).toBe('');
+    expect(harness.saved).toEqual([]);
+  });
+
+  it('does nothing without a payload', async () => {
+    const harness = activate();
+    await settle();
+    expect(harness.saved).toEqual([]);
   });
 });
