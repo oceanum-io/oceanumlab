@@ -23,6 +23,13 @@ import { IOceanumAuth } from '../auth/tokens';
 import { type ErrorKind, SpecStoreClient, SpecStoreError } from './client';
 import { notebooksChanged } from './events';
 import {
+  decodePayload,
+  hashWithoutPayload,
+  notebookFromDatamesh,
+  notebookName,
+  payloadFromHash
+} from './fromDatamesh';
+import {
   buildSpecBody,
   IOceanumLink,
   isSpecId,
@@ -133,6 +140,15 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     let warnedSignedOut = false;
 
     const signedIn = (): boolean => store !== null && auth.user !== null;
+
+    // A workspace sent by the Datamesh UI's "Open in notebook". Read it now and
+    // clear it from the address, so a reload does not open a second copy.
+    const datameshPayload = payloadFromHash(window.location.hash);
+    if (datameshPayload !== null) {
+      const url = new URL(window.location.href);
+      url.hash = hashWithoutPayload(url.hash);
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
     const label = (text: string) => () =>
       store ? text : `${text}${UNAVAILABLE}`;
 
@@ -1024,6 +1040,35 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       clearQuery();
     }
 
+    /**
+     * Open a new notebook that loads a Datamesh UI workspace or query. It is written to
+     * the Oceanum folder unlinked, like an example, so the first save creates a record
+     * of the user's own. Nothing runs until the user runs it.
+     */
+    async function openFromDatamesh(encoded: string): Promise<void> {
+      let content: INotebookContent;
+      let name: string;
+      try {
+        const request = decodePayload(encoded);
+        content = notebookFromDatamesh(request);
+        name = notebookName(request);
+      } catch (error) {
+        Notification.warning(
+          error instanceof Error
+            ? error.message
+            : 'The Datamesh link is not valid.',
+          { autoClose: 5000 }
+        );
+        return;
+      }
+      try {
+        const path = uniqueNotebookPath(name, await oceanumFolderNames());
+        await writeAndOpen(path, content);
+      } catch (error) {
+        await reportError('Opening the Datamesh workspace failed', error);
+      }
+    }
+
     // --- commands -----------------------------------------------------------------
 
     /** Whether the command can act on the pointer's row, the target notebook, or both. */
@@ -1224,5 +1269,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       .catch(error =>
         console.error('Failed to open the Oceanum notebook link', error)
       );
+
+    if (datameshPayload !== null) {
+      void app.restored.then(() => openFromDatamesh(datameshPayload));
+    }
   }
 };
