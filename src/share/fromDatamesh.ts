@@ -24,6 +24,31 @@ export const MAX_ITEMS = 100;
 /** Longest encoded payload accepted (characters of base64url). */
 export const MAX_ENCODED_LENGTH = 4 * 1024 * 1024;
 
+/**
+ * Deepest nesting of arrays and objects accepted. Real queries, GeoJSON
+ * multipolygon geofilters included, nest about 8 deep.
+ */
+export const MAX_DEPTH = 32;
+
+/** Nesting depth of a JSON value (a scalar is 0), without recursion. */
+function depthOf(value: unknown): number {
+  let max = 0;
+  const stack: [unknown, number][] = [[value, 0]];
+  while (stack.length) {
+    const [v, d] = stack.pop()!;
+    if (v !== null && typeof v === 'object') {
+      max = Math.max(max, d + 1);
+      if (max > MAX_DEPTH) {
+        return max;
+      }
+      for (const child of Object.values(v)) {
+        stack.push([child, d + 1]);
+      }
+    }
+  }
+  return max;
+}
+
 /** The fields of oceanum-python's `Query`. Anything else would make it warn. */
 const QUERY_FIELDS = [
   'datasource',
@@ -118,6 +143,9 @@ export function decodePayload(encoded: string): IDatameshNotebookRequest {
       `The Datamesh link holds more than ${MAX_ITEMS} queries, which is too many to open.`
     );
   }
+  if (depthOf(items) > MAX_DEPTH) {
+    throw new Error('The Datamesh link holds a query that is not valid.');
+  }
   for (const item of items) {
     if (
       !isObject(item) ||
@@ -136,21 +164,30 @@ export function decodePayload(encoded: string): IDatameshNotebookRequest {
   };
 }
 
-/**
- * The payload in a location hash (`#oceanum-datamesh=...`), or null when the hash
- * carries none. Other keys in the hash are ignored.
- */
-export function payloadFromHash(hash: string): string | null {
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  return params.get(FRAGMENT_KEY);
+const PAYLOAD_PREFIX = `${FRAGMENT_KEY}=`;
+
+/** The hash's `&`-separated parts, without the leading `#`. */
+function hashParts(hash: string): string[] {
+  const body = hash.replace(/^#/, '');
+  return body === '' ? [] : body.split('&');
 }
 
-/** The hash with the payload removed (`''` when nothing else is left). */
+/**
+ * The payload in a location hash (`#oceanum-datamesh=...`), or null when the hash
+ * carries none. Other parts of the hash are ignored.
+ */
+export function payloadFromHash(hash: string): string | null {
+  const part = hashParts(hash).find(p => p.startsWith(PAYLOAD_PREFIX));
+  return part === undefined ? null : part.slice(PAYLOAD_PREFIX.length);
+}
+
+/**
+ * The hash with the payload removed (`''` when nothing else is left). Every other
+ * part is kept exactly as it was.
+ */
 export function hashWithoutPayload(hash: string): string {
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  params.delete(FRAGMENT_KEY);
-  const rest = params.toString();
-  return rest ? `#${rest}` : '';
+  const rest = hashParts(hash).filter(p => !p.startsWith(PAYLOAD_PREFIX));
+  return rest.length ? `#${rest.join('&')}` : '';
 }
 
 const INLINE_WIDTH = 72;
@@ -173,11 +210,8 @@ export function pyString(text: string): string {
   );
 }
 
-/**
- * A Python literal for a JSON value. Strings and keys go through `pyString`, so no
- * value can end the literal early or break the line.
- */
-export function pyLiteral(value: unknown, indent = 0): string {
+/** A Python literal for a scalar, or null for an array or object. */
+function pyScalar(value: unknown): string | null {
   if (value === null || value === undefined) {
     return 'None';
   }
@@ -191,10 +225,41 @@ export function pyLiteral(value: unknown, indent = 0): string {
   if (typeof value === 'string') {
     return pyString(value);
   }
+  return Array.isArray(value) || isObject(value) ? null : 'None';
+}
+
+function definedEntries(value: Record<string, unknown>): [string, unknown][] {
+  return Object.entries(value).filter(([, v]) => v !== undefined);
+}
+
+/** A Python literal on one line, rendering each node once. */
+function pyInline(value: unknown): string {
+  const scalar = pyScalar(value);
+  if (scalar !== null) {
+    return scalar;
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(pyInline).join(', ')}]`;
+  }
+  return `{${definedEntries(value as Record<string, unknown>)
+    .map(([k, v]) => `${pyString(k)}: ${pyInline(v)}`)
+    .join(', ')}}`;
+}
+
+/**
+ * A Python literal for a JSON value, wrapped over indented lines when it does not
+ * fit on one. Strings and keys go through `pyString`, so no value can end the
+ * literal early or break the line.
+ */
+export function pyLiteral(value: unknown, indent = 0): string {
+  const scalar = pyScalar(value);
+  if (scalar !== null) {
+    return scalar;
+  }
   const pad = ' '.repeat(indent + 4);
   const end = ' '.repeat(indent);
+  const inline = pyInline(value);
   if (Array.isArray(value)) {
-    const inline = `[${value.map(v => pyLiteral(v)).join(', ')}]`;
     if (inline.length + indent <= INLINE_WIDTH || value.length === 0) {
       return inline;
     }
@@ -202,10 +267,7 @@ export function pyLiteral(value: unknown, indent = 0): string {
     return `[\n${lines.join(',\n')},\n${end}]`;
   }
   if (isObject(value)) {
-    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
-    const inline = `{${entries
-      .map(([k, v]) => `${pyString(k)}: ${pyLiteral(v)}`)
-      .join(', ')}}`;
+    const entries = definedEntries(value);
     if (inline.length + indent <= INLINE_WIDTH || entries.length === 0) {
       return inline;
     }
@@ -298,13 +360,17 @@ function commentText(text: string): string {
   return text.replace(LINE_BREAKS, ' ').trim();
 }
 
-/** Text safe to put in a Markdown heading: no HTML, no Markdown syntax. */
+/**
+ * Text safe to put in a Markdown heading: no HTML, no Markdown syntax, and no
+ * autolink (`:`, `/`, `.` and `@` are escaped too). `&`, `<` and `>` become
+ * entities; every other ASCII punctuation character is backslash-escaped.
+ */
 function markdownText(text: string): string {
   return commentText(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/([\\`*_{}[\]()#+\-.!|~])/g, '\\$1');
+    .replace(/([!-%'-/:<-@[-`{-~])/g, '\\$1');
 }
 
 /** The OceanQL query to send: only fields oceanum-python's `Query` accepts. */

@@ -141,14 +141,20 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     const signedIn = (): boolean => store !== null && auth.user !== null;
 
-    // A workspace sent by the Datamesh UI's "Open in notebook". Read it now and
-    // clear it from the address, so a reload does not open a second copy.
+    // A workspace sent by the Datamesh UI's "Open in notebook". Read it now, before
+    // anything can rewrite the address. It stays in the address until the notebook
+    // is written (see openFromDatamesh): a sign-in redirect before then returns to
+    // the address it left, and so still carries the workspace.
     const datameshPayload = payloadFromHash(window.location.hash);
-    if (datameshPayload !== null) {
+    /** Remove the payload from the address, so a reload does not open a copy. */
+    const clearDatameshPayload = (): void => {
       const url = new URL(window.location.href);
-      url.hash = hashWithoutPayload(url.hash);
-      window.history.replaceState(window.history.state, '', url.toString());
-    }
+      const hash = hashWithoutPayload(url.hash);
+      if (hash !== url.hash) {
+        url.hash = hash;
+        window.history.replaceState(window.history.state, '', url.toString());
+      }
+    };
     const label = (text: string) => () =>
       store ? text : `${text}${UNAVAILABLE}`;
 
@@ -1053,6 +1059,7 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         content = notebookFromDatamesh(request);
         name = notebookName(request);
       } catch (error) {
+        clearDatameshPayload();
         Notification.warning(
           error instanceof Error
             ? error.message
@@ -1066,6 +1073,8 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         await writeAndOpen(path, content);
       } catch (error) {
         await reportError('Opening the Datamesh workspace failed', error);
+      } finally {
+        clearDatameshPayload();
       }
     }
 

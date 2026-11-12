@@ -688,9 +688,11 @@ describe('opening a Datamesh UI workspace from the address', () => {
       `/lab/#other=1&${FRAGMENT_KEY}=${payload}`
     );
     const harness = activate({ user: null, folder: { 'Coast.ipynb': {} } });
-    // Read and cleared during activation, before anything can change the address.
-    expect(window.location.hash).toBe('#other=1');
+    // Read at activation but left in the address until the notebook is written,
+    // so a sign-in redirect before then still carries it.
+    expect(window.location.hash).toContain(FRAGMENT_KEY);
     await settle();
+    expect(window.location.hash).toBe('#other=1');
 
     const path = 'Oceanum/Coast (1).ipynb';
     expect(harness.saved).toEqual([path]);

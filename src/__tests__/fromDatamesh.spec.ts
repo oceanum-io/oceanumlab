@@ -4,6 +4,7 @@ import {
   FRAGMENT_KEY,
   hashWithoutPayload,
   IDatameshNotebookRequest,
+  MAX_DEPTH,
   MAX_ITEMS,
   notebookFromDatamesh,
   notebookName,
@@ -14,6 +15,7 @@ import {
   queryCellSource,
   queryFields
 } from '../share/fromDatamesh';
+import { marked } from 'marked';
 
 const QUERY = {
   id: 'abc123',
@@ -74,6 +76,41 @@ describe('fragment handling', () => {
     expect(hashWithoutPayload(hash)).toBe('#foo=1');
     expect(hashWithoutPayload(`#${FRAGMENT_KEY}=x`)).toBe('');
     expect(payloadFromHash('')).toBeNull();
+  });
+
+  it('keeps every other part of the hash exactly as it was', () => {
+    expect(hashWithoutPayload(`#my-heading&${FRAGMENT_KEY}=x`)).toBe(
+      '#my-heading'
+    );
+    expect(hashWithoutPayload(`#a=b%20c&${FRAGMENT_KEY}=x&d`)).toBe(
+      '#a=b%20c&d'
+    );
+  });
+});
+
+describe('payload limits', () => {
+  const nested = (depth: number): unknown => {
+    let v: unknown = 'x'.repeat(80);
+    for (let i = 0; i < depth; i++) {
+      v = [v];
+    }
+    return v;
+  };
+
+  it('rejects nesting deeper than real queries use', () => {
+    const enc = (depth: number) =>
+      encodePayload({
+        v: 1,
+        items: [{ datasource: 'abc', variables: nested(depth) }]
+      } as unknown as IDatameshNotebookRequest);
+    expect(() => decodePayload(enc(20))).not.toThrow();
+    expect(() => decodePayload(enc(MAX_DEPTH))).toThrow('not valid');
+  });
+
+  it('renders deep values in linear time (was 2^depth)', () => {
+    const started = Date.now();
+    pyLiteral(nested(MAX_DEPTH));
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 
@@ -200,6 +237,23 @@ describe('line breaks cannot escape a comment or a string', () => {
   });
 });
 
+describe('the Markdown heading, rendered as JupyterLab renders it', () => {
+  it.each([
+    '[x](https://e.example) ![y](https://e.example/p.png)',
+    'https://2130706433/login',
+    'www.evil.example',
+    'me@evil.example',
+    '<img src=x onerror=alert(1)>',
+    '[x](javascript:alert(1))',
+    '`code` **bold** _em_ ~~s~~'
+  ])('%s renders as plain text', async name => {
+    const nb = notebookFromDatamesh(request([QUERY], name));
+    const html = await marked.parse(String(nb.cells[0].source), { gfm: true });
+    const heading = html.split('\n')[0];
+    expect(heading).toMatch(/^<h1>[^<]*<\/h1>$/);
+  });
+});
+
 describe('optional text fields', () => {
   it('accepts null name, label and description', () => {
     const enc = encodePayload({
@@ -222,7 +276,7 @@ describe('notebookFromDatamesh', () => {
     expect(nb.nbformat).toBe(4);
     expect(nb.metadata).toEqual({ language_info: { name: 'python' } });
     expect(nb.cells).toHaveLength(4);
-    expect(nb.cells[0].source).toContain('# My &lt;b&gt;work&lt;/b&gt;space');
+    expect(nb.cells[0].source).toContain('# My &lt;b&gt;work&lt;\\/b&gt;space');
     expect(nb.cells[1].source).toContain('datamesh = Connector()');
     expect(nb.cells[2].source).toContain(
       'era5_wind10m_abc123 = datamesh.query'
