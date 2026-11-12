@@ -10,6 +10,7 @@ import {
   payloadFromHash,
   pyIdentifier,
   pyLiteral,
+  pyString,
   queryCellSource,
   queryFields
 } from '../share/fromDatamesh';
@@ -151,6 +152,65 @@ describe('query cells', () => {
       'x'
     );
     expect(src.split('\n')[0]).toBe('# a print("pwned")');
+  });
+});
+
+// Every character Python's str.splitlines() breaks on, which IPython uses to split
+// a cell into lines (reviewer-found injection through the comment line).
+const SPLITLINES = [
+  0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029
+].map(c => String.fromCharCode(c));
+
+describe('line breaks cannot escape a comment or a string', () => {
+  it.each(SPLITLINES.map(c => [c.charCodeAt(0).toString(16), c]))(
+    'U+%s in a description or label stays inside the comment',
+    (_hex, sep) => {
+      for (const item of [
+        { ...QUERY, description: `wind${sep}import os` },
+        { ...QUERY, description: undefined, label: `wind${sep}import os` }
+      ]) {
+        const src = queryCellSource(item, 'x');
+        const comment = src.split('\n')[0];
+        expect(comment).toBe('# wind import os');
+        for (const c of SPLITLINES.filter(s => s !== '\n')) {
+          expect(src).not.toContain(c);
+        }
+      }
+    }
+  );
+
+  it('escapes C1 controls and U+2028/9 inside string literals and keys', () => {
+    const text = SPLITLINES.join('') + String.fromCharCode(0, 0x7f, 0x9f);
+    const lit = pyLiteral({ [text]: text });
+    // Only printable ASCII is left: every control and separator is a \u escape.
+    expect(pyString(text)).toMatch(/^[\x20-\x7e]*$/);
+    // pyLiteral's own wrapping adds plain newlines, and nothing else.
+    expect(lit).toMatch(/^[\x20-\x7e\n]*$/);
+    expect(lit).toContain('\\u0085');
+    expect(lit).toContain('\\u2028');
+    // Still the same value once parsed (JSON reads \u escapes as Python does).
+    expect(JSON.parse(pyString(text))).toBe(text);
+  });
+
+  it('strips them from the Markdown heading too', () => {
+    const nb = notebookFromDatamesh(
+      request([QUERY], `a${SPLITLINES.join('')}b`)
+    );
+    expect(String(nb.cells[0].source).split('\n')[0]).toBe('# a b');
+  });
+});
+
+describe('optional text fields', () => {
+  it('accepts null name, label and description', () => {
+    const enc = encodePayload({
+      v: 1,
+      name: null,
+      items: [{ ...QUERY, label: null, description: null }]
+    } as unknown as IDatameshNotebookRequest);
+    const req = decodePayload(enc);
+    expect(req.name).toBeUndefined();
+    const nb = notebookFromDatamesh(req);
+    expect(nb.cells[2].source).toContain('era5_wind10m = datamesh.query(');
   });
 });
 

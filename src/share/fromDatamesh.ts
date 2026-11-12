@@ -48,8 +48,8 @@ const FILTER_FIELDS = QUERY_FIELDS.filter(
 /** One query: an OceanQL spec plus the Datamesh UI's own `label`. */
 export interface IDatameshQuery {
   datasource: string;
-  label?: string;
-  description?: string;
+  label?: string | null;
+  description?: string | null;
   [key: string]: unknown;
 }
 
@@ -103,7 +103,11 @@ export function decodePayload(encoded: string): IDatameshNotebookRequest {
     );
   }
   const { name, items } = parsed;
-  if (name !== undefined && typeof name !== 'string') {
+  // null is accepted wherever a string is optional: the UI copies datasource
+  // properties that may be null.
+  const optionalText = (value: unknown): boolean =>
+    value === undefined || value === null || typeof value === 'string';
+  if (!optionalText(name)) {
     throw new Error('The Datamesh link is not valid.');
   }
   if (!Array.isArray(items) || items.length === 0) {
@@ -119,8 +123,8 @@ export function decodePayload(encoded: string): IDatameshNotebookRequest {
       !isObject(item) ||
       typeof item.datasource !== 'string' ||
       item.datasource.trim() === '' ||
-      (item.label !== undefined && typeof item.label !== 'string') ||
-      (item.description !== undefined && typeof item.description !== 'string')
+      !optionalText(item.label) ||
+      !optionalText(item.description)
     ) {
       throw new Error('The Datamesh link holds a query that is not valid.');
     }
@@ -151,9 +155,27 @@ export function hashWithoutPayload(hash: string): string {
 
 const INLINE_WIDTH = 72;
 
+/** Characters JSON leaves raw that Python's `splitlines()` still breaks on. */
+const RAW_BREAKS = new RegExp(
+  `[\\x7f-\\x9f${String.fromCharCode(0x2028, 0x2029)}]`,
+  'g'
+);
+
 /**
- * A Python literal for a JSON value. Strings use JSON's escaping, which is also valid
- * Python, so no value can end the literal early.
+ * A Python string literal. JSON's escaping is valid Python and escapes C0 controls;
+ * the C1 controls and U+2028/U+2029 it leaves raw are escaped too, so the generated
+ * source has no character a kernel could treat as a line break.
+ */
+export function pyString(text: string): string {
+  return JSON.stringify(text).replace(
+    RAW_BREAKS,
+    c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  );
+}
+
+/**
+ * A Python literal for a JSON value. Strings and keys go through `pyString`, so no
+ * value can end the literal early or break the line.
  */
 export function pyLiteral(value: unknown, indent = 0): string {
   if (value === null || value === undefined) {
@@ -167,7 +189,7 @@ export function pyLiteral(value: unknown, indent = 0): string {
     return Number.isFinite(value) ? JSON.stringify(value) : 'None';
   }
   if (typeof value === 'string') {
-    return JSON.stringify(value);
+    return pyString(value);
   }
   const pad = ' '.repeat(indent + 4);
   const end = ' '.repeat(indent);
@@ -182,13 +204,13 @@ export function pyLiteral(value: unknown, indent = 0): string {
   if (isObject(value)) {
     const entries = Object.entries(value).filter(([, v]) => v !== undefined);
     const inline = `{${entries
-      .map(([k, v]) => `${JSON.stringify(k)}: ${pyLiteral(v)}`)
+      .map(([k, v]) => `${pyString(k)}: ${pyLiteral(v)}`)
       .join(', ')}}`;
     if (inline.length + indent <= INLINE_WIDTH || entries.length === 0) {
       return inline;
     }
     const lines = entries.map(
-      ([k, v]) => `${pad}${JSON.stringify(k)}: ${pyLiteral(v, indent + 4)}`
+      ([k, v]) => `${pad}${pyString(k)}: ${pyLiteral(v, indent + 4)}`
     );
     return `{\n${lines.join(',\n')},\n${end}}`;
   }
@@ -260,9 +282,14 @@ export function pyIdentifier(text: string, taken: Set<string>): string {
   return name;
 }
 
-/** CR, LF and the Unicode line and paragraph separators (U+2028, U+2029). */
+/**
+ * Every C0 and C1 control character, plus U+2028 and U+2029. This is a superset of
+ * what Python's `str.splitlines()` breaks on (LF, CR, VT, FF, FS, GS, RS, NEL and the
+ * two separators), which IPython's input transformer uses to split a cell into lines:
+ * left in a `#` comment, any of them would end the comment and run what follows.
+ */
 const LINE_BREAKS = new RegExp(
-  `[\\r\\n${String.fromCharCode(0x2028, 0x2029)}]+`,
+  `[\\x00-\\x1f\\x7f-\\x9f${String.fromCharCode(0x2028, 0x2029)}]+`,
   'g'
 );
 
