@@ -688,9 +688,9 @@ describe('opening a Datamesh UI workspace from the address', () => {
       `/lab/#other=1&${FRAGMENT_KEY}=${payload}`
     );
     const harness = activate({ user: null, folder: { 'Coast.ipynb': {} } });
-    // Read at activation but left in the address until the notebook is written,
-    // so a sign-in redirect before then still carries it.
-    expect(window.location.hash).toContain(FRAGMENT_KEY);
+    // Removed during activation, before JupyterLab's router can hand it to the new
+    // notebook as a heading fragment (which redrew the notebook just after opening).
+    expect(window.location.hash).toBe('#other=1');
     await settle();
     expect(window.location.hash).toBe('#other=1');
 
