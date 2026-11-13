@@ -141,22 +141,21 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
 
     const signedIn = (): boolean => store !== null && auth.user !== null;
 
-    // A workspace sent by the Datamesh UI's "Open in notebook". Read it now, before
-    // anything can rewrite the address. It stays in the address until the notebook
-    // is written (see openFromDatamesh), so nothing is lost if the page is left
-    // before then. Not handled: a full-page sign-in redirect (signInRedirect) puts
-    // the hash back only after this plugin has activated, so the workspace opens
-    // on the next load rather than this one.
+    // A workspace sent by the Datamesh UI's "Open in notebook". Read it and remove it
+    // from the address now, during activation:
+    // - JupyterLab's notebook extension hands the address's hash to the current
+    //   notebook as a heading to scroll to whenever the router routes. Left in place,
+    //   the payload reached the new notebook that way and redrew it a moment after
+    //   it opened.
+    // - A reload must not open a second copy.
+    // Not handled: a full-page sign-in redirect (signInRedirect, dev only) puts the
+    // hash back only after this plugin has activated.
     const datameshPayload = payloadFromHash(window.location.hash);
-    /** Remove the payload from the address, so a reload does not open a copy. */
-    const clearDatameshPayload = (): void => {
+    if (datameshPayload !== null) {
       const url = new URL(window.location.href);
-      const hash = hashWithoutPayload(url.hash);
-      if (hash !== url.hash) {
-        url.hash = hash;
-        window.history.replaceState(window.history.state, '', url.toString());
-      }
-    };
+      url.hash = hashWithoutPayload(url.hash);
+      window.history.replaceState(window.history.state, '', url.toString());
+    }
     const label = (text: string) => () =>
       store ? text : `${text}${UNAVAILABLE}`;
 
@@ -1061,7 +1060,6 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         content = notebookFromDatamesh(request);
         name = notebookName(request);
       } catch (error) {
-        clearDatameshPayload();
         Notification.warning(
           error instanceof Error
             ? error.message
@@ -1075,8 +1073,6 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
         await writeAndOpen(path, content);
       } catch (error) {
         await reportError('Opening the Datamesh workspace failed', error);
-      } finally {
-        clearDatameshPayload();
       }
     }
 
