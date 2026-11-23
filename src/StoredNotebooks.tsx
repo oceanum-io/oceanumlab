@@ -41,25 +41,29 @@ function readCollapsed(): Set<SectionId> {
  */
 function useCollapsed(): [(id: SectionId) => boolean, (id: SectionId) => void] {
   const [collapsed, setCollapsed] = React.useState(readCollapsed);
-  const toggle = React.useCallback((id: SectionId) => {
-    setCollapsed(previous => {
-      const next = new Set(previous);
-      if (!next.delete(id)) {
+  const toggle = (id: SectionId): void => {
+    const collapse = !collapsed.has(id);
+    const flip = (set: Set<SectionId>): Set<SectionId> => {
+      const next = new Set(set);
+      if (collapse) {
         next.add(id);
+      } else {
+        next.delete(id);
       }
       return next;
-    });
-  }, []);
-  React.useEffect(() => {
+    };
+    setCollapsed(flip);
+    // Saved onto what is stored now, not this page's copy, so a choice made in another
+    // window is kept.
     try {
       window.localStorage.setItem(
         COLLAPSED_KEY,
-        JSON.stringify([...collapsed])
+        JSON.stringify([...flip(readCollapsed())])
       );
     } catch {
       // Not remembered across reloads; the section still collapses.
     }
-  }, [collapsed]);
+  };
   return [id => collapsed.has(id), toggle];
 }
 
@@ -68,19 +72,23 @@ function SectionHeading({
   title,
   count,
   expanded,
-  onToggle
+  onToggle,
+  controls
 }: {
   title: string;
   count: number | null;
   expanded: boolean;
   onToggle: () => void;
+  /** Id of the section's body, which is rendered only while expanded. */
+  controls: string;
 }): React.ReactElement {
   return (
-    <div className="oceanum-notebooks-heading">
+    <h3 className="oceanum-notebooks-heading">
       <button
         type="button"
         className="oceanum-notebooks-toggle"
         aria-expanded={expanded}
+        aria-controls={expanded ? controls : undefined}
         onClick={onToggle}
       >
         <span className="oceanum-notebooks-title">
@@ -91,7 +99,7 @@ function SectionHeading({
           <span className="oceanum-notebooks-count">{count}</span>
         )}
       </button>
-    </div>
+    </h3>
   );
 }
 
@@ -189,6 +197,7 @@ function ExampleSections({
   collapsed: boolean;
   onToggle: () => void;
 }): React.ReactElement | null {
+  const bodyId = React.useId();
   // Not yet known, or hidden with no way to keep a change: nothing to show.
   if (examples.state === 'none' || show === null || (!show && !onShowChange)) {
     return null;
@@ -206,6 +215,7 @@ function ExampleSections({
       count={count}
       expanded={expanded}
       onToggle={onShowChange ? () => onShowChange(!show) : onToggle}
+      controls={bodyId}
     />
   );
   // Collapsed: the heading stays, to expand them again.
@@ -216,7 +226,7 @@ function ExampleSections({
     return (
       <div className="oceanum-notebooks-section">
         {heading}
-        <div className="oceanum-text-error">
+        <div id={bodyId} className="oceanum-text-error">
           The examples could not be loaded. {examples.message}
         </div>
       </div>
@@ -225,7 +235,7 @@ function ExampleSections({
   return (
     <div className="oceanum-notebooks-section">
       {heading}
-      <ul className="oceanum-notebooks-list">
+      <ul id={bodyId} className="oceanum-notebooks-list">
         {examples.items.map(item => {
           const attributes = {
             [EXAMPLE_ID_ATTRIBUTE]: item.id,
@@ -277,6 +287,7 @@ function Section({
   collapsed: boolean;
   onToggle: () => void;
 }): React.ReactElement {
+  const bodyId = React.useId();
   // Each row carries its record id so the share plugin's context menu (Open, Rename,
   // Share, Delete) can tell which one was clicked.
   const rowAttributes = (item: ISpecSummary) => ({
@@ -290,11 +301,14 @@ function Section({
         count={items.length}
         expanded={!collapsed}
         onToggle={onToggle}
+        controls={bodyId}
       />
       {collapsed ? null : items.length === 0 ? (
-        <div className="oceanum-text-empty">{empty}</div>
+        <div id={bodyId} className="oceanum-text-empty">
+          {empty}
+        </div>
       ) : (
-        <ul className="oceanum-notebooks-list">
+        <ul id={bodyId} className="oceanum-notebooks-list">
           {items.map(item => (
             <li key={item.id}>
               {/* Names come from other users: React escapes these, never set as HTML. */}

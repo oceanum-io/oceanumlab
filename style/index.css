@@ -44,7 +44,8 @@
 }
 
 /* Headers within the panel's tabs (Datamesh Workspace and the workspace name, Oceanum
- * AI, My notebooks / Shared with me) share one text style: bold, standard case. */
+ * AI, My notebooks / Shared with me) share one text style: bold, standard case. The
+ * notebooks section headings then set a larger size, below. */
 .datamesh-workspace-header,
 .datamesh-workspace-name,
 .oceanum-ai-chat-header,
@@ -592,6 +593,7 @@
    follow the Oceanum light and dark themes. */
 .oceanum-notebooks-heading {
   display: flex;
+  margin: 0;
   font-size: var(--jp-ui-font-size2);
   border-bottom: var(--jp-border-width) solid var(--jp-border-color2);
 }

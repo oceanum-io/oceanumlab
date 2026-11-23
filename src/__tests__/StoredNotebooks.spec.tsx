@@ -525,6 +525,42 @@ describe('the Examples in the Notebooks tab', () => {
     widget.dispose();
   });
 
+  it('makes each heading a heading whose button controls its list', async () => {
+    stubFetch();
+    const widget = await render(signedIn());
+
+    const toggle = toggleOf(widget, 'My notebooks');
+    expect(toggle.parentElement!.tagName).toBe('H3');
+    const list = widget.node.querySelector(
+      `#${CSS.escape(toggle.getAttribute('aria-controls')!)}`
+    );
+    expect(list).not.toBeNull();
+    expect(idsIn(list as HTMLElement, 'data-spec-id')).toEqual([MINE]);
+
+    toggle.click();
+    await settle();
+    // Collapsed, the list is gone and the button names nothing.
+    expect(toggleOf(widget, 'My notebooks').hasAttribute('aria-controls')).toBe(
+      false
+    );
+    widget.dispose();
+  });
+
+  it("keeps another window's choice when saving its own", async () => {
+    stubFetch();
+    const widget = await render(signedIn());
+    // Another window collapsed Examples after this one loaded.
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(['examples']));
+
+    toggleOf(widget, 'Shared with me').click();
+    await settle();
+
+    expect(
+      JSON.parse(window.localStorage.getItem(COLLAPSED_KEY)!).sort()
+    ).toEqual(['examples', 'shared']);
+    widget.dispose();
+  });
+
   it('remembers collapsed sections in this browser', async () => {
     stubFetch();
     const first = await render(signedIn());
