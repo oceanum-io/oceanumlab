@@ -1283,9 +1283,11 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       // with a full-page redirect (Oceanum Notebook's requireSignIn) leaves the page once
       // its session check fails, and brings the workspace back afterwards. Opened before
       // that, the departing page would write a copy of its own.
-      void Promise.all([app.restored, auth.ready]).then(() =>
-        openFromDatamesh(datameshPayload)
-      );
+      Promise.all([app.restored, auth.ready])
+        .then(() => openFromDatamesh(datameshPayload))
+        .catch(error =>
+          console.error('Failed to open the Datamesh workspace', error)
+        );
     }
   }
 };
