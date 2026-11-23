@@ -50,7 +50,7 @@ describe('the datamesh-connect settings schema', () => {
   });
 
   it('shows the examples unless the user has hidden them', async () => {
-    // Settings stored before the switch existed must still load, showing examples.
+    // Settings stored before this setting existed must still load, showing examples.
     const before = await registryWith({ datameshToken: 'a-token' }).load(ID);
     expect(before.get('showExamples').composite).toBe(true);
 

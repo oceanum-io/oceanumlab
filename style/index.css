@@ -44,7 +44,8 @@
 }
 
 /* Headers within the panel's tabs (Datamesh Workspace and the workspace name, Oceanum
- * AI, My notebooks / Shared with me) share one text style: bold, standard case. */
+ * AI, My notebooks / Shared with me) share one text style: bold, standard case. The
+ * notebooks section headings then set a larger size, below. */
 .datamesh-workspace-header,
 .datamesh-workspace-name,
 .oceanum-ai-chat-header,
@@ -587,11 +588,24 @@
   display: none;
 }
 
-/* Stored notebooks (src/StoredNotebooks.tsx). */
+/* Stored notebooks (src/StoredNotebooks.tsx). The section headings are a size up from
+   the panel's other headers, as they head the lists; theme variables only, so they
+   follow the Oceanum light and dark themes. */
 .oceanum-notebooks-heading {
   display: flex;
-  justify-content: space-between;
-  padding: 6px 8px 2px;
+  margin: 0;
+  font-size: var(--jp-ui-font-size2);
+  border-bottom: var(--jp-border-width) solid var(--jp-border-color2);
+}
+
+.oceanum-notebooks-heading:hover {
+  background: var(--jp-layout-color2);
+}
+
+.oceanum-notebooks-count {
+  color: var(--jp-ui-font-color2);
+  font-size: var(--jp-ui-font-size1);
+  font-weight: normal;
 }
 
 .oceanum-notebooks-list {
@@ -646,75 +660,52 @@
   background: transparent;
 }
 
-/* The Examples heading's count and show/hide switch, kept together on the right. */
-.oceanum-notebooks-heading-end {
+/* A section heading is one button that collapses or expands its section: the caret and
+   title on the left, the count on the right. */
+.oceanum-notebooks-toggle {
   display: flex;
+  flex: 1;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
-}
-
-/* The Examples show/hide switch (a button with role="switch"). */
-.oceanum-notebooks-switch {
-  position: relative;
-  flex: none;
-  width: 24px;
-  height: 14px;
-  padding: 0;
+  padding: 10px 8px 6px;
   border: none;
-  border-radius: 7px;
-  background: var(--jp-layout-color3);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.oceanum-notebooks-switch[aria-checked='true'] {
-  background: var(--jp-brand-color1);
-}
-
-.oceanum-notebooks-switch:focus-visible {
+/* Inset, as the heading spans the panel and the panel's scroll box would clip it. */
+.oceanum-notebooks-toggle:focus-visible {
   outline: 1px solid var(--jp-brand-color1);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
-.oceanum-notebooks-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--jp-layout-color0);
-  transition: left 0.1s ease;
+.oceanum-notebooks-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.oceanum-notebooks-switch[aria-checked='true'] .oceanum-notebooks-switch-thumb {
-  left: 12px;
+/* A chevron drawn with two borders in the text colour, and no transparent ones, so
+   forced colours keep its shape: pointing right when collapsed, down when expanded. */
+.oceanum-notebooks-caret {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin: 0 3px 0 1px;
+  border-style: solid;
+  border-width: 0 2px 2px 0;
+  border-color: currentcolor;
+  transform: rotate(-45deg);
+  transition: transform 0.1s ease;
 }
 
-/* Forced colours replace backgrounds, which would leave a switch drawn only with them
-   invisible: draw it with system colours instead. */
-@media (forced-colors: active) {
-  .oceanum-notebooks-switch {
-    forced-color-adjust: none;
-    box-sizing: border-box;
-    border: 1px solid ButtonText;
-    background: Canvas;
-  }
-
-  .oceanum-notebooks-switch[aria-checked='true'] {
-    background: Highlight;
-  }
-
-  .oceanum-notebooks-switch-thumb {
-    top: 1px;
-    left: 1px;
-    background: ButtonText;
-  }
-
-  .oceanum-notebooks-switch[aria-checked='true']
-    .oceanum-notebooks-switch-thumb {
-    left: 11px;
-    background: HighlightText;
-  }
+.oceanum-notebooks-toggle[aria-expanded='true'] .oceanum-notebooks-caret {
+  transform: rotate(45deg);
 }
 
 .oceanum-notebooks-name {

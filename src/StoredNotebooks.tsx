@@ -15,6 +15,94 @@ import { SPEC_ID_ATTRIBUTE } from './share/plugin';
 /** Example rows carry their record id here, not in SPEC_ID_ATTRIBUTE: see Examples. */
 export const EXAMPLE_ID_ATTRIBUTE = 'data-example-id';
 
+/** localStorage key listing the sections this browser keeps collapsed. */
+export const COLLAPSED_KEY = 'oceanumlab:notebooks-collapsed';
+
+type SectionId = 'mine' | 'shared' | 'examples';
+const SECTION_IDS: readonly SectionId[] = ['mine', 'shared', 'examples'];
+
+function readCollapsed(): Set<SectionId> {
+  try {
+    const parsed: unknown = JSON.parse(
+      window.localStorage.getItem(COLLAPSED_KEY) ?? '[]'
+    );
+    return new Set(
+      Array.isArray(parsed) ? SECTION_IDS.filter(id => parsed.includes(id)) : []
+    );
+  } catch {
+    // Storage blocked or garbled: every section starts expanded.
+    return new Set();
+  }
+}
+
+/**
+ * Which sections are collapsed, remembered in this browser. A layout preference rather
+ * than a setting: nothing else depends on it, and it is not worth a settings round trip.
+ */
+function useCollapsed(): [(id: SectionId) => boolean, (id: SectionId) => void] {
+  const [collapsed, setCollapsed] = React.useState(readCollapsed);
+  const toggle = (id: SectionId): void => {
+    const collapse = !collapsed.has(id);
+    const flip = (set: Set<SectionId>): Set<SectionId> => {
+      const next = new Set(set);
+      if (collapse) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    };
+    setCollapsed(flip);
+    // Saved onto what is stored now, not this page's copy, so a choice made in another
+    // window is kept.
+    try {
+      window.localStorage.setItem(
+        COLLAPSED_KEY,
+        JSON.stringify([...flip(readCollapsed())])
+      );
+    } catch {
+      // Not remembered across reloads; the section still collapses.
+    }
+  };
+  return [id => collapsed.has(id), toggle];
+}
+
+/** A section heading: one button that collapses or expands the section. */
+function SectionHeading({
+  title,
+  count,
+  expanded,
+  onToggle,
+  controls
+}: {
+  title: string;
+  count: number | null;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Id of the section's body, which is rendered only while expanded. */
+  controls: string;
+}): React.ReactElement {
+  return (
+    <h3 className="oceanum-notebooks-heading">
+      <button
+        type="button"
+        className="oceanum-notebooks-toggle"
+        aria-expanded={expanded}
+        aria-controls={expanded ? controls : undefined}
+        onClick={onToggle}
+      >
+        <span className="oceanum-notebooks-title">
+          <span className="oceanum-notebooks-caret" aria-hidden="true" />
+          {title}
+        </span>
+        {count !== null && (
+          <span className="oceanum-notebooks-count">{count}</span>
+        )}
+      </button>
+    </h3>
+  );
+}
+
 export interface IStoredNotebooksProps {
   auth: IOceanumAuth;
   /**
@@ -33,9 +121,8 @@ export interface IStoredNotebooksProps {
    */
   showExamples?: boolean | null;
   /**
-   * Record the user's choice to show or hide the examples. The Examples heading offers
-   * its switch only where this is given: a switch that could not keep its setting
-   * would flip back on the next load.
+   * Record the user's choice to expand or collapse the examples, made by clicking the
+   * Examples heading. Without it the heading collapses them for this browser only.
    */
   onShowExamplesChange?: (show: boolean) => void;
   /**
@@ -98,14 +185,20 @@ function ExampleSections({
   examples,
   onOpen,
   show,
-  onShowChange
+  onShowChange,
+  collapsed,
+  onToggle
 }: {
   examples: Examples;
   onOpen?: (item: INotebookDemoItem) => void;
   show: boolean | null;
   onShowChange?: (show: boolean) => void;
+  /** Collapsed in this browser; used only where the `showExamples` setting cannot be kept. */
+  collapsed: boolean;
+  onToggle: () => void;
 }): React.ReactElement | null {
-  // Not yet known, or hidden with no switch to bring them back: nothing to show.
+  const bodyId = React.useId();
+  // Not yet known, or hidden with no way to keep a change: nothing to show.
   if (examples.state === 'none' || show === null || (!show && !onShowChange)) {
     return null;
   }
@@ -113,38 +206,27 @@ function ExampleSections({
   if (count === 0) {
     return null;
   }
+  // Where it can be kept, the `showExamples` setting is what the heading expands and
+  // collapses, so the choice users made with the earlier switch carries over.
+  const expanded = onShowChange ? show : !collapsed;
   const heading = (
-    <div className="oceanum-notebooks-heading">
-      Examples
-      <span className="oceanum-notebooks-heading-end">
-        {count !== null && (
-          <span className="oceanum-notebooks-count">{count}</span>
-        )}
-        {onShowChange && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={show}
-            aria-label="Show examples"
-            title="Show examples"
-            className="oceanum-notebooks-switch"
-            onClick={() => onShowChange(!show)}
-          >
-            <span className="oceanum-notebooks-switch-thumb" />
-          </button>
-        )}
-      </span>
-    </div>
+    <SectionHeading
+      title="Examples"
+      count={count}
+      expanded={expanded}
+      onToggle={onShowChange ? () => onShowChange(!show) : onToggle}
+      controls={bodyId}
+    />
   );
-  // Hidden: the heading stays, so the switch is there to bring them back.
-  if (!show) {
+  // Collapsed: the heading stays, to expand them again.
+  if (!expanded) {
     return <div className="oceanum-notebooks-section">{heading}</div>;
   }
   if (examples.state === 'error') {
     return (
       <div className="oceanum-notebooks-section">
         {heading}
-        <div className="oceanum-text-error">
+        <div id={bodyId} className="oceanum-text-error">
           The examples could not be loaded. {examples.message}
         </div>
       </div>
@@ -153,7 +235,7 @@ function ExampleSections({
   return (
     <div className="oceanum-notebooks-section">
       {heading}
-      <ul className="oceanum-notebooks-list">
+      <ul id={bodyId} className="oceanum-notebooks-list">
         {examples.items.map(item => {
           const attributes = {
             [EXAMPLE_ID_ATTRIBUTE]: item.id,
@@ -194,13 +276,18 @@ function Section({
   title,
   items,
   empty,
-  onOpen
+  onOpen,
+  collapsed,
+  onToggle
 }: {
   title: string;
   items: readonly ISpecSummary[];
   empty: string;
   onOpen?: (item: ISpecSummary) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }): React.ReactElement {
+  const bodyId = React.useId();
   // Each row carries its record id so the share plugin's context menu (Open, Rename,
   // Share, Delete) can tell which one was clicked.
   const rowAttributes = (item: ISpecSummary) => ({
@@ -209,14 +296,19 @@ function Section({
   });
   return (
     <div className="oceanum-notebooks-section">
-      <div className="oceanum-notebooks-heading">
-        {title}
-        <span className="oceanum-notebooks-count">{items.length}</span>
-      </div>
-      {items.length === 0 ? (
-        <div className="oceanum-text-empty">{empty}</div>
+      <SectionHeading
+        title={title}
+        count={items.length}
+        expanded={!collapsed}
+        onToggle={onToggle}
+        controls={bodyId}
+      />
+      {collapsed ? null : items.length === 0 ? (
+        <div id={bodyId} className="oceanum-text-empty">
+          {empty}
+        </div>
       ) : (
-        <ul className="oceanum-notebooks-list">
+        <ul id={bodyId} className="oceanum-notebooks-list">
           {items.map(item => (
             <li key={item.id}>
               {/* Names come from other users: React escapes these, never set as HTML. */}
@@ -262,6 +354,7 @@ export function StoredNotebooks({
   onSignIn
 }: IStoredNotebooksProps): React.ReactElement {
   const [load, setLoad] = React.useState<Load>({ state: 'loading' });
+  const [isCollapsed, toggleCollapsed] = useCollapsed();
   const [user, setUser] = React.useState(auth.user);
   // Bumped whenever the store changes, so the list is fetched again.
   const [version, setVersion] = React.useState(0);
@@ -379,18 +472,24 @@ export function StoredNotebooks({
         items={mine}
         empty="You have not saved any notebooks yet."
         onOpen={onOpen}
+        collapsed={isCollapsed('mine')}
+        onToggle={() => toggleCollapsed('mine')}
       />
       <Section
         title="Shared with me"
         items={shared}
         empty="No notebooks have been shared with you."
         onOpen={onOpen}
+        collapsed={isCollapsed('shared')}
+        onToggle={() => toggleCollapsed('shared')}
       />
       <ExampleSections
         examples={load.examples}
         onOpen={onOpenExample}
         show={showExamples}
         onShowChange={onShowExamplesChange}
+        collapsed={isCollapsed('examples')}
+        onToggle={() => toggleCollapsed('examples')}
       />
     </div>
   );
