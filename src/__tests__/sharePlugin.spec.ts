@@ -185,6 +185,8 @@ function activate(
     current?: NotebookPanel | null;
     folder?: Record<string, unknown>;
     stored?: Record<string, INotebookContent>;
+    /** `auth.ready`; settled unless given. */
+    ready?: Promise<void>;
   } = {}
 ): IHarness {
   const commands = new CommandRegistry();
@@ -203,7 +205,7 @@ function activate(
   const auth = {
     environment: { fileManagement: 'local' },
     urls: { specs: SPECS },
-    ready: Promise.resolve(),
+    ready: options.ready ?? Promise.resolve(),
     user: options.user === undefined ? USER : options.user,
     userChanged: new Signal<IOceanumAuth, IOceanumUser | null>(
       {} as IOceanumAuth
@@ -701,6 +703,21 @@ describe('opening a Datamesh UI workspace from the address', () => {
     expect(content.metadata).not.toHaveProperty('oceanum');
     expect(content.cells[2].source).toContain('datamesh.query(');
     expect(harness.calls).toEqual([]);
+  });
+
+  it('waits for sign-in to settle, so a page leaving to sign in writes nothing', async () => {
+    window.history.replaceState(null, '', `/lab/#${FRAGMENT_KEY}=${payload}`);
+    let settleSignIn = (): void => undefined;
+    const ready = new Promise<void>(resolve => (settleSignIn = resolve));
+    const harness = activate({ user: null, ready });
+    await settle();
+    expect(harness.saved).toEqual([]);
+    expect(harness.opened).toEqual([]);
+
+    settleSignIn();
+    await settle();
+    expect(harness.saved).toEqual(['Oceanum/Coast.ipynb']);
+    expect(harness.opened).toEqual(['Oceanum/Coast.ipynb']);
   });
 
   it('writes nothing for a payload that is not valid', async () => {

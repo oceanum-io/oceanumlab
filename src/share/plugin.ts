@@ -148,8 +148,9 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
     //   the payload reached the new notebook that way and redrew it a moment after
     //   it opened.
     // - A reload must not open a second copy.
-    // Not handled: a full-page sign-in redirect (signInRedirect, dev only) puts the
-    // hash back only after this plugin has activated.
+    // A host whose sign-in leaves the page (Oceanum Notebook's sign-in redirects) keeps
+    // its own copy of the address and restores it before the app starts again; opening
+    // waits for `auth.ready` (below) so the departing page writes nothing.
     const datameshPayload = payloadFromHash(window.location.hash);
     if (datameshPayload !== null) {
       const url = new URL(window.location.href);
@@ -1278,7 +1279,15 @@ export const sharePlugin: JupyterFrontEndPlugin<void> = {
       );
 
     if (datameshPayload !== null) {
-      void app.restored.then(() => openFromDatamesh(datameshPayload));
+      // After sign-in has settled too: a host that sends a signed-out visitor to sign in
+      // with a full-page redirect (Oceanum Notebook's requireSignIn) leaves the page once
+      // its session check fails, and brings the workspace back afterwards. Opened before
+      // that, the departing page would write a copy of its own.
+      Promise.all([app.restored, auth.ready])
+        .then(() => openFromDatamesh(datameshPayload))
+        .catch(error =>
+          console.error('Failed to open the Datamesh workspace', error)
+        );
     }
   }
 };
