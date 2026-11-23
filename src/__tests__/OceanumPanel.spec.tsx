@@ -159,7 +159,7 @@ describe('the Oceanum panel', () => {
   });
 });
 
-describe('the Examples switch in the Oceanum panel', () => {
+describe('the Examples heading in the Oceanum panel', () => {
   const EXAMPLE = '0b7d9f2e-1111-4a2b-8c3d-9e8f7a6b5c4d';
   const originalFetch = globalThis.fetch;
   afterEach(() => {
@@ -223,8 +223,13 @@ describe('the Examples switch in the Oceanum panel', () => {
         setShowExamples: (show: boolean) => saved.push(show)
       }
     });
+    // The Examples heading, which expands and collapses them.
     const toggle = (): HTMLButtonElement | null =>
-      widget.node.querySelector<HTMLButtonElement>('[role="switch"]');
+      Array.from(
+        widget.node.querySelectorAll<HTMLButtonElement>(
+          '.oceanum-notebooks-toggle'
+        )
+      ).find(button => button.textContent?.startsWith('Examples')) ?? null;
     // The tab has loaded, but the examples wait for the setting.
     await until(() => widget.node.querySelector('.oceanum-notebooks') !== null);
     expect(toggle()).toBeNull();
@@ -233,7 +238,7 @@ describe('the Examples switch in the Oceanum panel', () => {
     shown = true;
     settingsChanged.emit();
     await until(() => toggle() !== null);
-    expect(toggle()!.getAttribute('aria-checked')).toBe('true');
+    expect(toggle()!.getAttribute('aria-expanded')).toBe('true');
     expect(widget.node.querySelector('[data-example-id]')).not.toBeNull();
 
     toggle()!.click();
@@ -242,7 +247,7 @@ describe('the Examples switch in the Oceanum panel', () => {
     // The host saves the setting and says so; the panel reads it again.
     shown = false;
     settingsChanged.emit();
-    await until(() => toggle()?.getAttribute('aria-checked') === 'false');
+    await until(() => toggle()?.getAttribute('aria-expanded') === 'false');
     expect(widget.node.querySelector('[data-example-id]')).toBeNull();
 
     widget.dispose();

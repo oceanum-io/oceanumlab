@@ -7,7 +7,11 @@ import { IOceanumAuth, IOceanumUser } from '../auth/tokens';
 import { notebooksChanged } from '../share/events';
 import type { INotebookDemoItem } from '../share/notebook';
 import { NOTEBOOK_ITEM_SELECTOR } from '../share/plugin';
-import { IStoredNotebooksProps, StoredNotebooks } from '../StoredNotebooks';
+import {
+  COLLAPSED_KEY,
+  IStoredNotebooksProps,
+  StoredNotebooks
+} from '../StoredNotebooks';
 
 /** A signed-out auth that records whether sign-in was asked for. */
 function signedOut(): IOceanumAuth & { signIns: number } {
@@ -194,7 +198,11 @@ describe('the Examples in the Notebooks tab', () => {
   }
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    window.localStorage.clear();
   });
+
+  /** Let React apply a state change. */
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
   async function render(
     auth: IOceanumAuth,
@@ -355,7 +363,7 @@ describe('the Examples in the Notebooks tab', () => {
     stubFetch();
     const widget = await render(signedIn(), () => undefined);
 
-    const rows = section(widget, 'Examples')!.querySelectorAll('button');
+    const rows = section(widget, 'Examples')!.querySelectorAll('li button');
     expect(rows).toHaveLength(3);
     for (const row of Array.from(rows)) {
       expect(row.matches(NOTEBOOK_ITEM_SELECTOR)).toBe(false);
@@ -376,12 +384,13 @@ describe('the Examples in the Notebooks tab', () => {
     widget.dispose();
   });
 
-  const switchIn = (widget: Harness): HTMLButtonElement | null =>
-    section(widget, 'Examples')!.querySelector<HTMLButtonElement>(
-      '[role="switch"]'
-    );
+  /** The heading button of the section titled `title`. */
+  const toggleOf = (widget: Harness, title: string): HTMLButtonElement =>
+    section(widget, title)!.querySelector<HTMLButtonElement>(
+      '.oceanum-notebooks-toggle'
+    )!;
 
-  it('puts a switch on the Examples heading that asks to hide them', async () => {
+  it('expands and collapses the examples by their heading, through the setting', async () => {
     stubFetch();
     const changes: boolean[] = [];
     const widget = await render(signedIn(), undefined, {
@@ -389,14 +398,11 @@ describe('the Examples in the Notebooks tab', () => {
       onShowExamplesChange: show => changes.push(show)
     });
 
-    const toggle = switchIn(widget)!;
-    expect(toggle.getAttribute('aria-checked')).toBe('true');
-    expect(toggle.getAttribute('aria-label')).toBe('Show examples');
+    const toggle = toggleOf(widget, 'Examples');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(
-      section(widget, 'Examples')!
-        .querySelector('.oceanum-notebooks-heading')!
-        .contains(toggle)
-    ).toBe(true);
+      section(widget, 'Examples')!.querySelector('[role="switch"]')
+    ).toBeNull();
 
     toggle.click();
 
@@ -404,7 +410,7 @@ describe('the Examples in the Notebooks tab', () => {
     widget.dispose();
   });
 
-  it('keeps hidden examples folded under their heading, with the switch to bring them back', async () => {
+  it('keeps collapsed examples under their heading, which expands them again', async () => {
     stubFetch();
     const changes: boolean[] = [];
     const widget = await render(signedIn(), undefined, {
@@ -417,18 +423,18 @@ describe('the Examples in the Notebooks tab', () => {
     expect(
       examples.querySelector('.oceanum-notebooks-count')?.textContent
     ).toBe('3');
-    // Hidden, not forgotten: the demos are still listed, for the count.
+    // Collapsed, not forgotten: the demos are still listed, for the count.
     expect(fetches).toContain(DEMO_LISTING);
 
-    const toggle = switchIn(widget)!;
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    const toggle = toggleOf(widget, 'Examples');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     toggle.click();
 
     expect(changes).toEqual([true]);
     widget.dispose();
   });
 
-  it('shows no error for examples the user has hidden', async () => {
+  it('shows no error for examples the user has collapsed', async () => {
     stubFetch(
       () => ({ ok: false, status: 500, json: async () => ({}) }) as Response
     );
@@ -439,23 +445,31 @@ describe('the Examples in the Notebooks tab', () => {
 
     const examples = section(widget, 'Examples')!;
     expect(examples.querySelector('.oceanum-text-error')).toBeNull();
-    expect(switchIn(widget)).not.toBeNull();
+    expect(toggleOf(widget, 'Examples')).not.toBeNull();
     widget.dispose();
   });
 
-  it('offers no switch where the choice could not be kept', async () => {
+  it('collapses the examples in this browser where the setting cannot be kept', async () => {
     stubFetch();
     const widget = await render(signedIn());
 
-    expect(switchIn(widget)).toBeNull();
     expect(
       section(widget, 'Examples')!.querySelectorAll('[data-example-id]')
     ).toHaveLength(3);
+    toggleOf(widget, 'Examples').click();
+    await settle();
+
+    expect(
+      section(widget, 'Examples')!.querySelectorAll('[data-example-id]')
+    ).toHaveLength(0);
+    expect(toggleOf(widget, 'Examples').getAttribute('aria-expanded')).toBe(
+      'false'
+    );
     widget.dispose();
   });
 
   it('shows no examples while the setting is still loading', async () => {
-    // Otherwise examples a user has hidden would show for a moment on every reload.
+    // Otherwise examples a user has collapsed would show for a moment on every reload.
     stubFetch();
     const widget = await render(signedIn(), undefined, {
       showExamples: null,
@@ -470,7 +484,7 @@ describe('the Examples in the Notebooks tab', () => {
     widget.dispose();
   });
 
-  it('shows nothing for hidden examples that no switch could bring back', async () => {
+  it('shows nothing for hidden examples that nothing could bring back', async () => {
     stubFetch();
     const widget = await render(signedIn(), undefined, {
       showExamples: false
@@ -478,6 +492,90 @@ describe('the Examples in the Notebooks tab', () => {
 
     expect(section(widget, 'Examples')).toBeNull();
     widget.dispose();
+  });
+
+  it('collapses and expands My notebooks and Shared with me by their headings', async () => {
+    stubFetch();
+    const widget = await render(signedIn());
+
+    for (const [title, id] of [
+      ['My notebooks', MINE],
+      ['Shared with me', SHARED]
+    ]) {
+      const toggle = toggleOf(widget, title);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(toggle.textContent).toBe(`${title}1`);
+
+      toggle.click();
+      await settle();
+      expect(toggleOf(widget, title).getAttribute('aria-expanded')).toBe(
+        'false'
+      );
+      expect(idsIn(section(widget, title), 'data-spec-id')).toEqual([]);
+      // Still counted while collapsed.
+      expect(
+        section(widget, title)!.querySelector('.oceanum-notebooks-count')
+          ?.textContent
+      ).toBe('1');
+
+      toggleOf(widget, title).click();
+      await settle();
+      expect(idsIn(section(widget, title), 'data-spec-id')).toEqual([id]);
+    }
+    widget.dispose();
+  });
+
+  it('remembers collapsed sections in this browser', async () => {
+    stubFetch();
+    const first = await render(signedIn());
+    toggleOf(first, 'Shared with me').click();
+    await settle();
+    first.dispose();
+
+    expect(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY)!)).toEqual([
+      'shared'
+    ]);
+    const second = await render(signedIn());
+    expect(
+      toggleOf(second, 'Shared with me').getAttribute('aria-expanded')
+    ).toBe('false');
+    expect(toggleOf(second, 'My notebooks').getAttribute('aria-expanded')).toBe(
+      'true'
+    );
+    second.dispose();
+  });
+
+  it('starts expanded, and still collapses, where storage is blocked or garbled', async () => {
+    stubFetch();
+    window.localStorage.setItem(COLLAPSED_KEY, 'not json');
+    const garbled = await render(signedIn());
+    expect(
+      toggleOf(garbled, 'My notebooks').getAttribute('aria-expanded')
+    ).toBe('true');
+    garbled.dispose();
+
+    const getItem = jest
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new DOMException('blocked', 'SecurityError');
+      });
+    const setItem = jest
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('blocked', 'SecurityError');
+      });
+    try {
+      const blocked = await render(signedIn());
+      toggleOf(blocked, 'My notebooks').click();
+      await settle();
+      expect(
+        toggleOf(blocked, 'My notebooks').getAttribute('aria-expanded')
+      ).toBe('false');
+      blocked.dispose();
+    } finally {
+      getItem.mockRestore();
+      setItem.mockRestore();
+    }
   });
 });
 

@@ -1003,7 +1003,7 @@ export interface IDatameshWidgetProps {
    * until the settings have loaded.
    */
   showExamples?: () => boolean | null;
-  /** Save the `showExamples` setting, from the switch on the Examples heading. */
+  /** Save the `showExamples` setting, from a click on the Examples heading. */
   setShowExamples?: (show: boolean) => void;
 }
 
