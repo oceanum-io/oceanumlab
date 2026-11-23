@@ -678,9 +678,10 @@
   cursor: pointer;
 }
 
+/* Inset, as the heading spans the panel and the panel's scroll box would clip it. */
 .oceanum-notebooks-toggle:focus-visible {
   outline: 1px solid var(--jp-brand-color1);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .oceanum-notebooks-title {
@@ -689,20 +690,22 @@
   gap: 4px;
 }
 
-/* A triangle in the text colour, so forced colours draw it too: right when collapsed,
-   down when expanded. */
+/* A chevron drawn with two borders in the text colour, and no transparent ones, so
+   forced colours keep its shape: pointing right when collapsed, down when expanded. */
 .oceanum-notebooks-caret {
   flex: none;
-  width: 0;
-  height: 0;
+  width: 5px;
+  height: 5px;
+  margin: 0 3px 0 1px;
   border-style: solid;
-  border-width: 4px 0 4px 5px;
-  border-color: transparent transparent transparent currentcolor;
+  border-width: 0 2px 2px 0;
+  border-color: currentcolor;
+  transform: rotate(-45deg);
   transition: transform 0.1s ease;
 }
 
 .oceanum-notebooks-toggle[aria-expanded='true'] .oceanum-notebooks-caret {
-  transform: rotate(90deg);
+  transform: rotate(45deg);
 }
 
 .oceanum-notebooks-name {
